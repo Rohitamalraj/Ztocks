@@ -1,0 +1,8 @@
+{
+  "name": "zksynth-circuits",
+  "version": "1.0.0",
+  "description": "Circom ZK circuits for zkSynth KYC tier verification",
+  "dependencies": {
+    "circomlib": "^2.0.5"
+  }
+}
