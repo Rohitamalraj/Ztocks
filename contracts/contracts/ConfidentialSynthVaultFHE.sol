@@ -10,7 +10,7 @@ import "@fhevm/solidity/lib/FHE.sol";
 import "@fhevm/solidity/config/ZamaConfig.sol";
 import "./ZKVerifier.sol";
 import "./ConfidentialTierManager.sol";
-import "./SynthToken.sol";
+import "./ConfidentialSynthToken.sol";
 import "./FeeModule.sol";
 
 /// @title ConfidentialSynthVaultFHE
@@ -271,8 +271,9 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         uint256 positionSizeUSDC = collateralUSDC * 5; // Assume max 5x for demo
         uint256 synthAmountCalc = (positionSizeUSDC * 1e20) / executionPrice;
 
-        // 8. Mint synth tokens
-        SynthToken(synthToken).mint(msg.sender, synthAmountCalc);
+        // 8. Mint confidential synth tokens (encrypted amount)
+        euint64 encSynthAmount = FHE.asEuint64(uint64(synthAmountCalc));
+        ConfidentialSynthToken(synthToken).mint(msg.sender, encSynthAmount);
 
         // 9. Store position with encrypted leverage
         uint256 positionId = positions[msg.sender].length;

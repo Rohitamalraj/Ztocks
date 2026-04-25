@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@fhevm/solidity": "^0.11.1",
+    "@openzeppelin/confidential-contracts": "^0.4.0",
     "@openzeppelin/contracts": "^5.1.0"
   }
 }

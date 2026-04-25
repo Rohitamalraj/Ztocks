@@ -7,6 +7,7 @@
 Ztocks enables confidential trading of synthetic stocks (sAAPL, sTSLA, etc.) with:
 - **ZK Identity Layer**: Verify KYC tier without revealing personal data
 - **FHE Position Layer**: Encrypt collateral, leverage, and direction on-chain
+- **ERC7984 Token Layer**: Encrypted token balances using OpenZeppelin standard
 - **Tier-Based Leverage**: Enforce compliance rules on encrypted data
 - **MEV Protection**: Position parameters hidden from validators and bots
 
@@ -22,6 +23,12 @@ Ztocks enables confidential trading of synthetic stocks (sAAPL, sTSLA, etc.) wit
 │  Tier encrypted as euint8 in ConfidentialTierManager   │
 │  Positions encrypted as euint64/ebool in Vault         │
 │  Leverage enforcement on ciphertext using FHE ops      │
+└─────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────── ERC7984 Token Layer ────────────────┐
+│  ConfidentialSynthToken: Encrypted synth balances      │
+│  ConfidentialUSDC: Encrypted collateral wrapper        │
+│  OpenZeppelin standard for confidential tokens         │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────── Smart Contracts ────────────────────┐
@@ -104,7 +111,13 @@ cd frontend && npm run dev
 - `FHE.eq()`, `FHE.le()`, `FHE.mul()` operations
 - MEV-resistant trading
 
-### 3. Tier-Based Leverage
+### 3. ERC7984 Confidential Tokens
+- **ConfidentialSynthToken**: Encrypted synth balances (csAAPL, csTSLA, etc.)
+- **ConfidentialUSDC**: Encrypted collateral wrapper
+- OpenZeppelin standard compliance
+- Full balance privacy on-chain
+
+### 4. Tier-Based Leverage
 | Tier | Description | Max Leverage |
 |------|-------------|--------------|
 | 1 | Basic KYC | 2x |
@@ -120,8 +133,9 @@ cd frontend && npm run dev
 
 ## 🛠️ Technology Stack
 
-- **Smart Contracts**: Solidity 0.8.24, Hardhat, OpenZeppelin
+- **Smart Contracts**: Solidity 0.8.27, Hardhat, OpenZeppelin
 - **FHE**: Zama Protocol (@fhevm/solidity)
+- **Confidential Tokens**: OpenZeppelin ERC7984 (@openzeppelin/confidential-contracts)
 - **ZK Proofs**: Circom, snarkjs, Groth16
 - **Frontend**: Next.js 16, React 19, Tailwind CSS 4
 - **Web3**: Wagmi 2.x, RainbowKit, Viem
@@ -134,7 +148,8 @@ cd frontend && npm run dev
 - `ConfidentialSynthVaultFHE.sol` - FHE-encrypted trading vault
 - `ConfidentialTierManager.sol` - Encrypted tier management
 - `ZKVerifier.sol` - Groth16 proof verification
-- `SynthToken.sol` - ERC-20 synthetic assets
+- `ConfidentialSynthToken.sol` - ERC7984 confidential synth tokens
+- `ConfidentialUSDC.sol` - ERC7984 USDC wrapper
 - `FeeModule.sol` - Protocol fee collection
 
 ### Deployment
@@ -181,5 +196,22 @@ MIT
 - **Zama Protocol**: https://docs.zama.ai/protocol/
 
 ---
+
+## 📚 Documentation
+
+### ERC7984 Integration
+- **[ERC7984 Integration Guide](./ERC7984_INTEGRATION.md)** - Comprehensive guide to confidential tokens
+- **[Implementation Summary](./ERC7984_IMPLEMENTATION_SUMMARY.md)** - What was built and current status
+- **[Developer Quickstart](./DEVELOPER_QUICKSTART.md)** - Get started in 5 minutes
+
+### Technical Documentation
+- **[FHE Implementation](./FHE_IMPLEMENTATION_COMPLETE.md)** - Zama FHE integration details
+- **[Hackathon Brief](./CORRECTED_HACKATHON_BRIEF.md)** - Project overview for judges
+- **[Implementation Roadmap](./ZAMA_IMPLEMENTATION_ROADMAP.md)** - Development timeline
+
+### External Resources
+- [Zama Protocol Documentation](https://docs.zama.org/protocol)
+- [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts)
+- [ERC7984 Standard](https://docs.zama.org/protocol/examples/openzeppelin-confidential-contracts/erc7984)
 
 **Built with ❤️ for the Zama Hackathon 2026**
