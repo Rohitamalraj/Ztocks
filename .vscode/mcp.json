@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"Zama Protocol": {
+			"url": "https://docs.zama.org/protocol/~gitbook/mcp",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}
