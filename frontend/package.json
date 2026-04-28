@@ -23,6 +23,7 @@
     "circomlibjs": "^0.1.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fhevmjs": "^0.4.0",
     "lightweight-charts": "^4.2.3",
     "lucide-react": "^0.454.0",
     "next": "16.2.2",

@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useZkIdentity, tierLabel as formatTierLabel } from "@/hooks/use-zk-identity";
-import { FaucetButton } from "@/components/dashboard/faucet-button";
 import { useState, useEffect } from "react";
 import { Menu, X, ShieldCheck, Shield } from "lucide-react";
 import { useAccount } from "wagmi";
@@ -155,9 +154,6 @@ export function AppNav({ onVerifyClick, isVerified: isVerifiedProp, tier: tierPr
                   {isVerified ? "Verified" : "Verify Identity"}
                 </button>
               )}
-
-              {/* Faucet Button — only on app pages */}
-              {!isLandingPage && <FaucetButton />}
 
               {/* Connect Button */}
               <ConnectButton.Custom>

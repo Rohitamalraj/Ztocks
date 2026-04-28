@@ -29,16 +29,16 @@ export function StatsBar({
   const ticker = selectedMarket.ticker
   const currentPrice = selectedMarket.price
   const change24h = selectedMarket.change24h
-  
-  // Mock data for now - will be replaced with real data from backend/contracts
-  const volume24h = currentPrice * 1000000 // Mock volume
-  const high24h = currentPrice * 1.05 // Mock high
-  const low24h = currentPrice * 0.95 // Mock low
-  const openInterest = currentPrice * 500000 // Mock open interest
-  const fundingRate = 0.0001 // Mock funding rate
-  const indexPrice = currentPrice // Mock index price (same as current)
-  const availableLiquidity = currentPrice * 2000000 // Mock liquidity
-  const formatNumber = (num: number, decimals: number = 2) => {
+
+  const volume24h: number | null = null
+  const high24h: number | null = null
+  const low24h: number | null = null
+  const openInterest: number | null = null
+  const fundingRate: number | null = null
+  const indexPrice: number | null = Number.isFinite(currentPrice) && currentPrice > 0 ? currentPrice : null
+  const availableLiquidity: number | null = null
+  const formatNumber = (num: number | null, decimals: number = 2) => {
+    if (num === null || !Number.isFinite(num)) return "—"
     if (num >= 1e9) return `$${(num / 1e9).toFixed(1)}B`
     if (num >= 1e6) return `$${(num / 1e6).toFixed(1)}M`
     if (num >= 1e3) return `$${(num / 1e3).toFixed(1)}K`
@@ -77,13 +77,13 @@ export function StatsBar({
           {/* 24h High */}
           <div className="flex flex-col flex-shrink-0">
             <span className="font-mono text-[10px] text-muted-foreground">24h High</span>
-            <span className="font-mono text-xs">${high24h.toLocaleString()}</span>
+            <span className="font-mono text-xs">{formatNumber(high24h)}</span>
           </div>
 
           {/* 24h Low */}
           <div className="flex flex-col flex-shrink-0">
             <span className="font-mono text-[10px] text-muted-foreground">24h Low</span>
-            <span className="font-mono text-xs">${low24h.toLocaleString()}</span>
+            <span className="font-mono text-xs">{formatNumber(low24h)}</span>
           </div>
 
           {/* Open Interest */}
@@ -95,15 +95,13 @@ export function StatsBar({
           {/* Funding Rate */}
           <div className="flex flex-col flex-shrink-0">
             <span className="font-mono text-[10px] text-muted-foreground">Funding Rate</span>
-            <span className={`font-mono text-xs ${fundingRate >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-              {fundingRate >= 0 ? '+' : ''}{(fundingRate * 100).toFixed(4)}%
-            </span>
+            <span className="font-mono text-xs">{fundingRate === null ? "—" : `${fundingRate >= 0 ? '+' : ''}${(fundingRate * 100).toFixed(4)}%`}</span>
           </div>
 
           {/* Index Price */}
           <div className="flex flex-col flex-shrink-0">
             <span className="font-mono text-[10px] text-muted-foreground">Index Price</span>
-            <span className="font-mono text-xs">${indexPrice.toLocaleString()}</span>
+            <span className="font-mono text-xs">{formatNumber(indexPrice)}</span>
           </div>
 
           {/* Available Liquidity */}

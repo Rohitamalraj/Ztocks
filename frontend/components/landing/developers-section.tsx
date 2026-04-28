@@ -30,13 +30,14 @@ const [tier, expiry] = await client.readContract({
 
 const vault = useVault()
 
-// Vault enforces zk-verified tier cap atomically
-await vault.openPosition({
-  asset: "sAAPL",
-  direction: "LONG",
-  collateral: parseUnits("500", 6),
-  leverage: 5 // allowed for tier-2+
-})`,
+// Vault encrypts inputs client-side before submit
+await vault.openPosition(
+  "sAAPL",
+  "LONG",
+  500,
+  5,
+  189.22
+)`,
   },
   {
     label: "ZK Proof",

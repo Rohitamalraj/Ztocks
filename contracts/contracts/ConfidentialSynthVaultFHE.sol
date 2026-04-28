@@ -12,6 +12,7 @@ import "./ZKVerifier.sol";
 import "./ConfidentialTierManager.sol";
 import "./ConfidentialSynthToken.sol";
 import "./FeeModule.sol";
+import "./ConfidentialUSDC.sol";
 
 /// @title ConfidentialSynthVaultFHE
 /// @notice Core vault for opening/closing leveraged synthetic positions with FULL FHE encryption.
@@ -43,7 +44,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     // ─── External contracts ──────────────────────────────────────────────────
     ZKVerifier                public immutable zkVerifier;
     ConfidentialTierManager   public immutable tierManager;
-    IERC20                    public immutable usdc;
+    ConfidentialUSDC          public immutable collateralToken;
     FeeModule                 public feeModule;
 
     // ─── State ───────────────────────────────────────────────────────────────
@@ -105,16 +106,16 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     constructor(
         address zkVerifierAddress,
         address tierManagerAddress,
-        address usdcAddress,
+        address collateralTokenAddress,
         address feeModuleAddress
     ) Ownable(msg.sender) ZamaEthereumConfig() {
         require(zkVerifierAddress   != address(0), "ConfidentialSynthVaultFHE: zero zkVerifier");
         require(tierManagerAddress  != address(0), "ConfidentialSynthVaultFHE: zero tierManager");
-        require(usdcAddress         != address(0), "ConfidentialSynthVaultFHE: zero usdc");
+        require(collateralTokenAddress != address(0), "ConfidentialSynthVaultFHE: zero collateral token");
 
         zkVerifier  = ZKVerifier(zkVerifierAddress);
         tierManager = ConfidentialTierManager(tierManagerAddress);
-        usdc        = IERC20(usdcAddress);
+        collateralToken = ConfidentialUSDC(collateralTokenAddress);
         feeModule   = FeeModule(feeModuleAddress);
     }
 
@@ -161,13 +162,15 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         // 1. ZK identity check: user must have a valid, non-expired ZK proof
         if (!zkVerifier.isVerified(msg.sender)) revert NotEligible(msg.sender);
 
-        // 2. Convert encrypted inputs to euint types using FHE.fromExternal
+        // 2. Asset must be registered
+        if (!registeredAssets[synthToken]) revert AssetNotRegistered(synthToken);
+
+        // 3. Convert encrypted inputs to euint types using FHE.fromExternal
         ebool   isLong         = FHE.fromExternal(encIsLong, inputProof);
-        euint64 collateralUSDC = FHE.fromExternal(encCollateralUSDC, inputProof);
         euint8  leverage       = FHE.fromExternal(encLeverage, inputProof);
         euint64 executionPrice = FHE.fromExternal(encExecutionPrice, inputProof);
 
-        // 3. THE KEY FHE ENFORCEMENT: check leverage against tier cap
+        // 4. THE KEY FHE ENFORCEMENT: check leverage against tier cap
         //    This happens on ENCRYPTED data - contract never sees plaintext values
         //    We use FHE.select to conditionally proceed based on leverage validity
         ebool leverageValid = tierManager.checkLeverage(msg.sender, leverage);
@@ -177,31 +180,40 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         euint64 zero64 = FHE.asEuint64(0);
         euint8 zero8 = FHE.asEuint8(0);
         euint64 one64 = FHE.asEuint64(1);
-        
-        collateralUSDC = FHE.select(leverageValid, collateralUSDC, zero64);
         leverage = FHE.select(leverageValid, leverage, zero8);
         executionPrice = FHE.select(leverageValid, executionPrice, one64); // Avoid division by zero
 
-        // 4. Asset must be registered
-        if (!registeredAssets[synthToken]) revert AssetNotRegistered(synthToken);
+        // 5. Pull confidential collateral (requires cUSDC operator approval)
+        euint64 transferredCollateral = collateralToken.confidentialTransferFrom(
+            msg.sender,
+            address(this),
+            encCollateralUSDC,
+            inputProof
+        );
 
-        // 5. Calculate position size on ENCRYPTED data
+        // Refund if leverage is invalid
+        euint64 refundAmount = FHE.select(leverageValid, zero64, transferredCollateral);
+        FHE.allowThis(refundAmount);
+        collateralToken.confidentialTransfer(msg.sender, refundAmount);
+
+        euint64 collateralUSDC = FHE.select(leverageValid, transferredCollateral, zero64);
+        FHE.allowThis(collateralUSDC);
+
+        // 6. Calculate position size on ENCRYPTED data
         //    positionSize = collateral * leverage (all encrypted)
         //    Note: We use scalar multiplication where possible to save gas
         euint64 positionSize = FHE.mul(collateralUSDC, leverage);
 
-        // 6. For hackathon demo, we simplify synth amount calculation
+        // 7. For hackathon demo, we simplify synth amount calculation
         //    In production, this would require async decryption of executionPrice
         //    or using a plaintext oracle price
         //    For now, we just use position size as synth amount (simplified)
         euint64 synthAmount = positionSize;
 
-        // 7. For now, we need to decrypt collateral to pull USDC (limitation of current design)
-        //    In production, this would use a decryption callback or user would pre-approve
-        //    For hackathon demo, we'll use a simplified approach
-        // TODO: Implement proper decryption callback for production
-        
-        // 8. Store ENCRYPTED position
+        // 8. Mint confidential synth tokens to the user
+        ConfidentialSynthToken(synthToken).mint(msg.sender, synthAmount);
+
+        // 9. Store ENCRYPTED position
         uint256 positionId = positions[msg.sender].length;
         positions[msg.sender].push(EncryptedPosition({
             asset:          synthToken,
@@ -214,7 +226,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
             isOpen:         true
         }));
 
-        // 9. Allow user to decrypt their own position data
+        // 10. Allow user to decrypt their own position data
         FHE.allow(isLong, msg.sender);
         FHE.allow(collateralUSDC, msg.sender);
         FHE.allow(leverage, msg.sender);
@@ -260,7 +272,13 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         if (executionPrice == 0) revert InvalidExecutionPrice();
 
         // 5. Pull USDC from user
-        usdc.safeTransferFrom(msg.sender, address(this), collateralUSDC);
+        IERC20 underlying = IERC20(collateralToken.underlying());
+        underlying.safeTransferFrom(msg.sender, address(this), collateralUSDC);
+        underlying.safeIncreaseAllowance(address(collateralToken), collateralUSDC);
+
+        // Wrap USDC into confidential cUSDC for the vault
+        euint64 wrappedCollateral = collateralToken.wrap(address(this), collateralUSDC);
+        FHE.allowThis(wrappedCollateral);
 
         // 6. Collect opening fee
         if (address(feeModule) != address(0)) {
@@ -280,7 +298,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         positions[msg.sender].push(EncryptedPosition({
             asset:          synthToken,
             isLong:         FHE.asEbool(isLong),
-            collateralUSDC: FHE.asEuint64(uint64(collateralUSDC)),
+            collateralUSDC: wrappedCollateral,
             leverage:       leverage,
             entryPrice:     FHE.asEuint64(uint64(executionPrice)),
             synthAmount:    FHE.asEuint64(uint64(synthAmountCalc)),
@@ -290,6 +308,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
 
         // 10. Allow user to decrypt
         FHE.allow(leverage, msg.sender);
+        FHE.allow(wrappedCollateral, msg.sender);
 
         emit PositionOpened(msg.sender, positionId, synthToken, block.timestamp);
     }
@@ -303,6 +322,10 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         EncryptedPosition storage pos = positions[msg.sender][positionId];
         if (!pos.isOpen) revert PositionAlreadyClosed();
         if (executionPrice == 0) revert InvalidExecutionPrice();
+
+        // Burn synth tokens and return collateral (no P&L calculation in hackathon demo)
+        ConfidentialSynthToken(pos.asset).burn(msg.sender, pos.synthAmount);
+        collateralToken.confidentialTransfer(msg.sender, pos.collateralUSDC);
 
         // Mark closed
         pos.isOpen = false;

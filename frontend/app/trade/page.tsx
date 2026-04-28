@@ -72,7 +72,8 @@ export default function TradePage() {
 
   // ─── Build positions for PositionsPanel ────────────────────────────────────
   const enrichedPositions = vault.positions.map((pos) => {
-    const markPrice  = prices[pos.asset]?.price ?? pos.entryPrice;
+    const livePrice = prices[pos.asset]?.price ?? 0;
+    const markPrice  = livePrice > 0 ? livePrice : pos.entryPrice;
     const posSizeUSD = pos.collateralUSDC * pos.leverage;
     const pnl = pos.isLong
       ? posSizeUSD * ((markPrice - pos.entryPrice) / pos.entryPrice)
@@ -142,7 +143,8 @@ export default function TradePage() {
     async (id: string) => {
       const pos = vault.positions.find((p) => p.id === id);
       if (pos) {
-        const executionPrice = prices[pos.asset]?.price ?? pos.entryPrice;
+        const livePrice = prices[pos.asset]?.price ?? 0;
+        const executionPrice = livePrice > 0 ? livePrice : pos.entryPrice;
         await vault.closePosition(pos.index, executionPrice);
       }
     },
@@ -207,7 +209,7 @@ export default function TradePage() {
             usdcBalance={vault.usdcBalance}
             txStatus={vault.txStatus}
             onTrade={handleTrade}
-            isTrading={["approving-usdc", "approving-hsp", "opening"].includes(vault.txStatus)}
+            isTrading={["approving-usdc", "wrapping", "setting-operator", "opening"].includes(vault.txStatus)}
             onVerifyClick={() => setVerifyModalOpen(true)}
           />
         }

@@ -72,6 +72,10 @@ async function fetchFinnhubPrice(ticker: string): Promise<number | null> {
 
 async function fetchPrice(ticker: string): Promise<number> {
   const upperTicker = ticker.toUpperCase();
+
+  if (!CRYPTO_ASSETS.includes(upperTicker) && !STOCK_ASSETS.includes(upperTicker)) {
+    throw new Error(`Unsupported ticker: ${upperTicker}`);
+  }
   
   // Check cache first
   const cached = priceCache.get(upperTicker);
@@ -90,25 +94,14 @@ async function fetchPrice(ticker: string): Promise<number> {
     price = await fetchFinnhubPrice(upperTicker);
   }
 
-  // Fallback to mock prices
   if (price === null) {
-    console.warn('[Price] Using mock price for', upperTicker);
-    const mockPrices: Record<string, number> = {
-      BTC: 65000,
-      ETH: 3500,
-      SOL: 150,
-      AAPL: 180,
-      TSLA: 250,
-      NVDA: 900,
-      GOOGL: 140,
-    };
-    price = mockPrices[upperTicker] || 100;
+    throw new Error(`Price unavailable for ${upperTicker}`);
   }
 
   // Cache the price
   priceCache.set(upperTicker, {
     price,
-    timestamp: Date.now()
+    timestamp: Date.now(),
   });
 
   return price;
@@ -132,9 +125,13 @@ router.get('/:ticker', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('[Price] Failed to fetch price:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    const status = message.startsWith('Unsupported ticker')
+      ? 400
+      : message.startsWith('Price unavailable')
+        ? 502
+        : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -159,9 +156,8 @@ router.get('/', async (req: Request, res: Response) => {
     res.json({ prices });
   } catch (error) {
     console.error('[Price] Failed to fetch prices:', error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    res.status(502).json({ error: message });
   }
 });
 

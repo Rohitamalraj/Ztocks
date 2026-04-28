@@ -43,17 +43,6 @@ const TICKERS: Record<AssetSymbol, string> = {
   sAMD: "AMD",
 };
 
-const FALLBACK: Record<AssetSymbol, number> = {
-  sAAPL: 192.10,
-  sTSLA: 251.20,
-  sNVDA: 875.40,
-  sSPY:  542.30,
-  sAMZN: 186.50,
-  sMSFT: 425.30,
-  sMETA: 512.80,
-  sNFLX: 640.20,
-  sAMD: 168.40,
-};
 
 type QuotePayload = {
   c?: number;
@@ -64,7 +53,7 @@ type QuotePayload = {
 
 const initPrices = (): Record<AssetSymbol, PriceData> =>
   ASSETS.reduce((acc, sym) => {
-    acc[sym] = { price: FALLBACK[sym], change24h: 0, changePercent: 0 };
+    acc[sym] = { price: 0, change24h: 0, changePercent: 0 };
     return acc;
   }, {} as Record<AssetSymbol, PriceData>);
 
@@ -95,21 +84,6 @@ export function useMockPrices() {
             const hasLiveQuote = !!quote && typeof quote.c === "number" && quote.c > 0;
 
             if (!hasLiveQuote) {
-              const fallbackPrice = prev[sym]?.price && prev[sym].price > 0 ? prev[sym].price : FALLBACK[sym];
-              const fallbackData: PriceData = prev[sym] ?? {
-                price: fallbackPrice,
-                change24h: 0,
-                changePercent: 0,
-              };
-              if (
-                !prev[sym] ||
-                prev[sym].price !== fallbackData.price ||
-                prev[sym].change24h !== fallbackData.change24h ||
-                prev[sym].changePercent !== fallbackData.changePercent
-              ) {
-                next[sym] = fallbackData;
-                changed = true;
-              }
               return;
             }
 

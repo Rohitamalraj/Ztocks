@@ -35,7 +35,7 @@ export function CandlestickChart({
   const { data, loading, error } = useFinnhubCandles(realTicker, selectedTimeframe, true);
   const currentPrice = data && data.length > 0 ? data[data.length - 1].close : 0;
   
-  // Calculate 24h change (mock for now, could be derived from daily data)
+  // Calculate 24h change from available candle data
   const change24h = data && data.length > 0 ? ((data[data.length - 1].close - data[0].open) / data[0].open) * 100 : 0;
 
   // Initialize chart

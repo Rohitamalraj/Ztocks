@@ -21,7 +21,6 @@ const footerLinks = {
     { name: "Sepolia", href: "#" },
     { name: "Etherscan", href: "#" },
     { name: "Explorer", href: "#" },
-    { name: "Testnet Faucet", href: "#" },
   ],
   Legal: [
     { name: "Privacy", href: "#" },

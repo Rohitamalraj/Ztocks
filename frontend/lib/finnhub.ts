@@ -53,7 +53,7 @@ function getApiKey(): string | null {
   const key = process.env.FINNHUB_API_KEY
   if (!key) {
     if (!warnedMissingApiKey) {
-      console.warn("FINNHUB_API_KEY is not set; using fallback market data where available")
+      console.warn("FINNHUB_API_KEY is not set; live market data is unavailable")
       warnedMissingApiKey = true
     }
     return null
@@ -113,7 +113,7 @@ export async function fetchQuote(symbol: string): Promise<FinnhubQuote | null> {
       const hasLivePrice = typeof data.c === "number" && data.c > 0
 
       if (!hasLivePrice) {
-        warnOnce(`no-data:${normalizedSymbol}`, `No live quote data for ${normalizedSymbol}; using cached/fallback quote`)
+        warnOnce(`no-data:${normalizedSymbol}`, `No live quote data for ${normalizedSymbol}; using cached quote when available`)
         const next: QuoteCacheEntry = {
           value: cached?.value ?? null,
           fetchedAt,
@@ -142,7 +142,7 @@ export async function fetchQuote(symbol: string): Promise<FinnhubQuote | null> {
 
       return nextValue
     } catch {
-      warnOnce(`network:${normalizedSymbol}`, `Error fetching quote for ${normalizedSymbol}; using cached/fallback quote`)
+      warnOnce(`network:${normalizedSymbol}`, `Error fetching quote for ${normalizedSymbol}; using cached quote when available`)
       const next: QuoteCacheEntry = {
         value: cached?.value ?? null,
         fetchedAt: Date.now(),

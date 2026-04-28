@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAccount, usePublicClient } from "wagmi";
+import { useState } from "react";
+import { useAccount } from "wagmi";
 import Link from "next/link";
 import { AppNav } from "@/components/app/app-nav";
 import { VerifyIdentityModal } from "@/components/dashboard/verify-identity-modal";
@@ -9,8 +9,6 @@ import { TokenLogo } from "@/components/ui/token-logo";
 import { useVault } from "@/hooks/use-vault";
 import { useMockPrices } from "@/hooks/use-mock-prices";
 import { useZkIdentity } from "@/hooks/use-zk-identity";
-import { SYNTH_VAULT_ABI } from "@/lib/abis";
-import { CONTRACTS } from "@/lib/contracts";
 import { Loader2 } from "lucide-react";
 import type { AssetSymbol } from "@/hooks/use-mock-prices";
 
@@ -36,106 +34,19 @@ function formatPrice(value: number): string {
   return value.toFixed(4);
 }
 
-const CLOSED_PNL_LOOKBACK_BLOCKS = 500_000n;
-
 export default function PortfolioPage() {
   const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient();
   const [activeTab, setActiveTab] = useState<"positions" | "history">("positions");
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
-  const [closedPnlById, setClosedPnlById] = useState<Record<string, number>>({});
 
   const vault    = useVault();
   const prices   = useMockPrices();
   const identity = useZkIdentity();
-  const closedPositionIds = vault.allPositions.filter((p) => !p.isOpen).map((p) => p.id);
-  const closedPositionKey = closedPositionIds.join(",");
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (!address || !publicClient) {
-      setClosedPnlById({});
-      return;
-    }
-
-    const ids = closedPositionKey ? closedPositionKey.split(",") : [];
-
-    if (ids.length === 0) {
-      setClosedPnlById({});
-      return;
-    }
-
-    const loadClosedPnls = async () => {
-      try {
-        const latestBlock = await publicClient.getBlockNumber();
-        const fromRecentBlock = latestBlock > CLOSED_PNL_LOOKBACK_BLOCKS
-          ? latestBlock - CLOSED_PNL_LOOKBACK_BLOCKS
-          : 0n;
-
-        let logs = await publicClient.getContractEvents({
-          address: CONTRACTS.SynthVault as `0x${string}`,
-          abi: SYNTH_VAULT_ABI,
-          eventName: "PositionClosed",
-          args: {
-            user: address,
-          },
-          fromBlock: fromRecentBlock,
-          toBlock: "latest",
-          strict: false,
-        });
-
-        if (logs.length === 0 && fromRecentBlock > 0n) {
-          logs = await publicClient.getContractEvents({
-            address: CONTRACTS.SynthVault as `0x${string}`,
-            abi: SYNTH_VAULT_ABI,
-            eventName: "PositionClosed",
-            args: {
-              user: address,
-            },
-            fromBlock: 0n,
-            toBlock: "latest",
-            strict: false,
-          });
-        }
-
-        const pnlByPositionId: Record<string, number> = {};
-        logs.forEach((log) => {
-          const positionId = log.args?.positionId;
-          const pnl = log.args?.pnl;
-          if (typeof positionId !== "bigint" || typeof pnl !== "bigint") return;
-          pnlByPositionId[String(positionId)] = Number(pnl) / 1e6;
-        });
-
-        const next: Record<string, number> = {};
-        ids.forEach((positionIdText) => {
-          const pnl = pnlByPositionId[positionIdText];
-          if (typeof pnl === "number" && Number.isFinite(pnl)) {
-            next[positionIdText] = pnl;
-          }
-        });
-
-        if (cancelled) return;
-
-        setClosedPnlById(next);
-      } catch (err) {
-        console.warn("[zkSynth:portfolio] Failed to load closed position PnL logs", err);
-        if (!cancelled) {
-          setClosedPnlById({});
-        }
-      }
-    };
-
-    void loadClosedPnls();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [address, publicClient, closedPositionKey]);
 
   // Enrich positions with live mark price + P&L
   const enrichedPositions = vault.positions.map((pos) => {
-    const markPrice  = prices[pos.asset as AssetSymbol]?.price ?? pos.entryPrice;
+    const livePrice = prices[pos.asset as AssetSymbol]?.price ?? 0;
+    const markPrice  = livePrice > 0 ? livePrice : pos.entryPrice;
     const posSizeUSD = pos.collateralUSDC * pos.leverage;
     const pnl = pos.isLong
       ? posSizeUSD * ((markPrice - pos.entryPrice) / pos.entryPrice)
@@ -156,8 +67,7 @@ export default function PortfolioPage() {
     .map((pos) => {
       const displayTicker = pos.asset.startsWith("s") ? pos.asset.slice(1) : pos.asset;
       const live = enrichedById.get(pos.id);
-      const realizedPnl = !pos.isOpen ? closedPnlById[pos.id] : undefined;
-      const effectivePnl = live?.pnl ?? realizedPnl;
+      const effectivePnl = live?.pnl;
       const hasPnl = typeof effectivePnl === "number" && Number.isFinite(effectivePnl);
       const pnlText = hasPnl ? `${effectivePnl >= 0 ? "+" : ""}$${formatPnL(effectivePnl)}` : "N/A";
       const pnlClass = hasPnl
@@ -177,12 +87,7 @@ export default function PortfolioPage() {
 
   // Portfolio stats
   const openPnl = enrichedPositions.reduce((s, p) => s + p.pnl, 0);
-  const realizedPnl = vault.allPositions.reduce((sum, pos) => {
-    if (pos.isOpen) return sum;
-    const pnl = closedPnlById[pos.id];
-    return typeof pnl === "number" && Number.isFinite(pnl) ? sum + pnl : sum;
-  }, 0);
-  const totalPnl = openPnl + realizedPnl;
+  const totalPnl = openPnl;
   const openEquity = enrichedPositions.reduce((s, p) => s + p.collateralUSDC + p.pnl, 0);
   const totalValue = vault.usdcBalance + openEquity;
   const openCount      = enrichedPositions.length;

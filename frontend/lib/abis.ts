@@ -56,10 +56,11 @@ export const SYNTH_VAULT_ABI = [
     stateMutability: "nonpayable",
     inputs: [
       { name: "synthToken",     type: "address" },
-      { name: "isLong",         type: "bool" },
-      { name: "collateralUSDC", type: "uint256" },
-      { name: "leverage",       type: "uint256" },
-      { name: "executionPrice", type: "uint256" },
+      { name: "encIsLong",         type: "bytes32" },
+      { name: "encCollateralUSDC", type: "bytes32" },
+      { name: "encLeverage",       type: "bytes32" },
+      { name: "encExecutionPrice", type: "bytes32" },
+      { name: "inputProof",        type: "bytes" },
     ],
     outputs: [],
   },
@@ -84,27 +85,16 @@ export const SYNTH_VAULT_ABI = [
         type: "tuple[]",
         components: [
           { name: "asset",          type: "address" },
-          { name: "isLong",         type: "bool" },
-          { name: "collateralUSDC", type: "uint256" },
-          { name: "leverage",       type: "uint8" },
-          { name: "entryPrice",     type: "uint256" },
-          { name: "synthAmount",    type: "uint256" },
+          { name: "isLong",         type: "bytes32" },
+          { name: "collateralUSDC", type: "bytes32" },
+          { name: "leverage",       type: "bytes32" },
+          { name: "entryPrice",     type: "bytes32" },
+          { name: "synthAmount",    type: "bytes32" },
           { name: "openTime",       type: "uint256" },
           { name: "isOpen",         type: "bool" },
         ],
       },
     ],
-  },
-  {
-    name: "getHealthFactor",
-    type: "function",
-    stateMutability: "view",
-    inputs: [
-      { name: "user",  type: "address" },
-      { name: "index", type: "uint256" },
-      { name: "currentPrice", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "getPositionCount",
@@ -127,11 +117,7 @@ export const SYNTH_VAULT_ABI = [
       { name: "user",           type: "address", indexed: true },
       { name: "positionId",     type: "uint256", indexed: true },
       { name: "asset",          type: "address", indexed: true },
-      { name: "isLong",         type: "bool",    indexed: false },
-      { name: "collateralUSDC", type: "uint256", indexed: false },
-      { name: "leverage",       type: "uint8",   indexed: false },
-      { name: "entryPrice",     type: "uint256", indexed: false },
-      { name: "synthAmount",    type: "uint256", indexed: false },
+      { name: "openTime",       type: "uint256", indexed: false },
     ],
   },
   {
@@ -140,23 +126,48 @@ export const SYNTH_VAULT_ABI = [
     inputs: [
       { name: "user",         type: "address", indexed: true },
       { name: "positionId",   type: "uint256", indexed: true },
-      { name: "exitPrice",    type: "uint256", indexed: false },
-      { name: "pnl",          type: "int256",  indexed: false },
-      { name: "returnedUSDC", type: "uint256", indexed: false },
+      { name: "closeTime",    type: "uint256", indexed: false },
     ],
   },
 ] as const;
 
-export const MOCK_TOKEN_ABI = [
+export const CUSDC_ABI = [
   {
-    name: "faucet",
+    name: "wrap",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "to",     type: "address" },
+      { name: "to", type: "address" },
       { name: "amount", type: "uint256" },
     ],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    name: "setOperator",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "operator", type: "address" },
+      { name: "until", type: "uint48" },
+    ],
     outputs: [],
+  },
+  {
+    name: "isOperator",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "holder", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    name: "underlying",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
   },
 ] as const;
 

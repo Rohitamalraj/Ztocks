@@ -6,7 +6,6 @@ import { ArrowLeft, ChevronDown, ShieldCheck, ShieldAlert, Loader2, Menu, X } fr
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { useAccount } from "wagmi";
 import { useZkIdentity, tierLabel } from "@/hooks/use-zk-identity";
-import { FaucetButton } from "@/components/dashboard/faucet-button";
 import { VerifyIdentityModal } from "@/components/dashboard/verify-identity-modal";
 
 export type TierKey = "BASIC" | "ADVANCED" | "PREMIUM" | "ULTIMATE";
@@ -93,9 +92,6 @@ export function DashboardNav({ currentTier, onTierChange, showTierMenu, onToggle
                 <span className="text-yellow-600 font-mono text-xs">Verify Identity</span>
               </button>
             )}
-
-            {/* Testnet faucet */}
-            <FaucetButton />
 
             {/* Wallet connect */}
             <ConnectButton showBalance={false} chainStatus="none" accountStatus="address" />

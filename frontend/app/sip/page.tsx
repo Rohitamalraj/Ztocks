@@ -63,7 +63,8 @@ export default function SipPage() {
   const sipOpenPositions = useMemo(
     () =>
       vault.positions.map((position) => {
-        const markPrice = prices[position.asset]?.price ?? position.entryPrice;
+        const livePrice = prices[position.asset]?.price ?? 0;
+        const markPrice = livePrice > 0 ? livePrice : position.entryPrice;
         const posSizeUSD = position.collateralUSDC * position.leverage;
         const pnl = position.isLong
           ? posSizeUSD * ((markPrice - position.entryPrice) / position.entryPrice)
@@ -158,7 +159,7 @@ export default function SipPage() {
 
     const runDuePlans = async () => {
       if (cancelled) return;
-      if (["approving-usdc", "approving-hsp", "opening", "closing"].includes(vault.txStatus)) {
+      if (["approving-usdc", "wrapping", "setting-operator", "opening", "closing"].includes(vault.txStatus)) {
         return;
       }
 

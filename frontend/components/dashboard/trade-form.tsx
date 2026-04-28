@@ -236,7 +236,8 @@ export function TradeForm({
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {txStatus === 'approving-usdc' ? 'Approving USDC...' 
-                    : txStatus === 'approving-hsp' ? 'Approving Fee Token...'
+                    : txStatus === 'wrapping' ? 'Wrapping USDC...'
+                    : txStatus === 'setting-operator' ? 'Approving vault...'
                     : 'Opening Position...'}
                 </>
               ) : (

@@ -56,7 +56,8 @@ export function OpenPositionForm({ selectedAsset, prices, tier, onOpen, txStatus
 
   const buttonLabel = () => {
     if (txStatus === "approving-usdc") return "Approving USDC...";
-    if (txStatus === "approving-hsp")  return "Approving Fee Token...";
+    if (txStatus === "wrapping")       return "Wrapping USDC...";
+    if (txStatus === "setting-operator") return "Approving vault...";
     if (txStatus === "opening")        return "Opening position...";
     if (txStatus === "success")        return "Position opened ✓";
     if (txStatus === "error")          return "Transaction failed";
@@ -208,7 +209,7 @@ export function OpenPositionForm({ selectedAsset, prices, tier, onOpen, txStatus
                 </div>
                 <div className="flex items-center gap-2 text-foreground/80">
                   <span className="w-4 h-4 rounded-full border-2 border-muted-foreground flex items-center justify-center text-[10px]">2</span>
-                  <span>Get test tokens (USDC + Fee Token) - Click &quot;Get Test Tokens&quot; button</span>
+                  <span>Fund your wallet with USDC for collateral</span>
                 </div>
                 <div className="flex items-center gap-2 text-foreground/80">
                   <span className="w-4 h-4 rounded-full border-2 border-muted-foreground flex items-center justify-center text-[10px]">3</span>
