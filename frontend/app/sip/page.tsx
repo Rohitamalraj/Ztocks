@@ -1,20 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { toast } from "sonner";
 import { AppNav } from "@/components/app/app-nav";
 import { PortfolioSipSection } from "@/components/dashboard/portfolio-sip-section";
 import { SipPlannerPanel } from "@/components/dashboard/sip-planner-panel";
-import { VerifyIdentityModal } from "@/components/dashboard/verify-identity-modal";
-import { useMockPrices } from "@/hooks/use-mock-prices";
+import { useAssetQuotes } from "@/hooks/use-asset-quotes";
 import { useSipPlans } from "@/hooks/use-sip-plans";
 import { useVault } from "@/hooks/use-vault";
-import { useZkIdentity } from "@/hooks/use-zk-identity";
+import { useKycTier } from "@/hooks/use-kyc-tier";
 import { ASSET_TOKENS } from "@/lib/contracts";
-import type { AssetSymbol } from "@/hooks/use-mock-prices";
+import type { AssetSymbol } from "@/hooks/use-asset-quotes";
 import type { SipPlan } from "@/hooks/use-sip-plans";
+
+const VerifyIdentityModal = dynamic(
+  () => import("@/components/dashboard/verify-identity-modal").then((m) => m.VerifyIdentityModal),
+  { ssr: false }
+);
 
 const MARKET_META: Record<AssetSymbol, { name: string }> = {
   sAAPL: { name: "Apple Inc." },
@@ -45,9 +50,11 @@ export default function SipPage() {
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
   const [runningSipPlanId, setRunningSipPlanId] = useState<string | null>(null);
 
-  const prices = useMockPrices();
+  const kyc = useKycTier();
+  const { isVerified, tier } = kyc;
+
+  const prices = useAssetQuotes();
   const vault = useVault();
-  const identity = useZkIdentity();
   const {
     plans: sipPlanList,
     isLoaded: isSipLoaded,
@@ -56,8 +63,6 @@ export default function SipPage() {
     togglePlan,
     markPlanExecuted,
   } = useSipPlans();
-
-  const { isVerified, tier } = identity;
   const sipAssets = ASSETS.map((sym) => ({ symbol: sym, name: MARKET_META[sym].name }));
 
   const sipOpenPositions = useMemo(
@@ -243,11 +248,12 @@ export default function SipPage() {
         </div>
       </div>
 
-      <VerifyIdentityModal
-        open={verifyModalOpen}
-        onOpenChange={setVerifyModalOpen}
-        identityState={identity}
-      />
+      {verifyModalOpen && (
+        <VerifyIdentityModal
+          open={verifyModalOpen}
+          onOpenChange={setVerifyModalOpen}
+        />
+      )}
     </div>
   );
 }

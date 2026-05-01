@@ -1,4 +1,4 @@
-# zkSynth Circuits
+# Ztocks Circuits
 
 > **Circom ZK circuits for privacy-preserving KYC tier verification**
 

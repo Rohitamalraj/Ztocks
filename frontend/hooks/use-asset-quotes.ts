@@ -43,13 +43,14 @@ const TICKERS: Record<AssetSymbol, string> = {
   sAMD: "AMD",
 };
 
-
-type QuotePayload = {
-  c?: number;
-  d?: number;
-  dp?: number;
-  pc?: number;
-} | null;
+type QuotePayload =
+  | {
+      c?: number;
+      d?: number;
+      dp?: number;
+      pc?: number;
+    }
+  | null;
 
 const initPrices = (): Record<AssetSymbol, PriceData> =>
   ASSETS.reduce((acc, sym) => {
@@ -57,7 +58,7 @@ const initPrices = (): Record<AssetSymbol, PriceData> =>
     return acc;
   }, {} as Record<AssetSymbol, PriceData>);
 
-export function useMockPrices() {
+export function useAssetQuotes() {
   const [prices, setPrices] = useState<Record<AssetSymbol, PriceData>>(initPrices);
   const quoteWarningShownRef = useRef(false);
 
@@ -90,17 +91,9 @@ export function useMockPrices() {
             const price = quote.c as number;
             const prevClose = typeof quote.pc === "number" && quote.pc > 0 ? quote.pc : undefined;
             const change24h =
-              typeof quote.d === "number"
-                ? quote.d
-                : prevClose
-                  ? price - prevClose
-                  : 0;
+              typeof quote.d === "number" ? quote.d : prevClose ? price - prevClose : 0;
             const changePercent =
-              typeof quote.dp === "number"
-                ? quote.dp
-                : prevClose
-                  ? (change24h / prevClose) * 100
-                  : 0;
+              typeof quote.dp === "number" ? quote.dp : prevClose ? (change24h / prevClose) * 100 : 0;
 
             const nextData: PriceData = { price, change24h, changePercent };
             if (

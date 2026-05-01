@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { useZkIdentity, tierLabel as formatTierLabel } from "@/hooks/use-zk-identity";
 import { useState, useEffect } from "react";
 import { Menu, X, ShieldCheck, Shield } from "lucide-react";
 import { useAccount } from "wagmi";
@@ -17,12 +16,15 @@ interface AppNavProps {
 
 export function AppNav({ onVerifyClick, isVerified: isVerifiedProp, tier: tierProp }: AppNavProps = {}) {
   const pathname = usePathname();
-  const zkIdentity = useZkIdentity();
   const { isConnected } = useAccount();
-  // Use props when provided (trade/portfolio pass live values), else fall back to hook
-  const isVerified = isVerifiedProp ?? zkIdentity.isVerified;
-  const tier = tierProp ?? zkIdentity.tier;
-  const tierLabel = formatTierLabel(tier);
+  const isVerified = isVerifiedProp ?? false;
+  const tier = tierProp ?? 0;
+  const tierLabel =
+    tier === 4 ? "Institutional" :
+    tier === 3 ? "Premium HNW" :
+    tier === 2 ? "Accredited Investor" :
+    tier === 1 ? "Basic" :
+    "Unverified";
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -69,7 +71,7 @@ export function AppNav({ onVerifyClick, isVerified: isVerifiedProp, tier: tierPr
                   isLandingPage && isScrolled ? "text-xl" : "text-xl"
                 }`}
               >
-                zkSynth
+                Ztocks
               </span>
               <span
                 className={`text-muted-foreground font-mono transition-all duration-500 ${
@@ -138,7 +140,7 @@ export function AppNav({ onVerifyClick, isVerified: isVerifiedProp, tier: tierPr
               )}
 
               {/* Verify Identity Button — only on app pages, not landing */}
-              {!isLandingPage && isConnected && (
+              {!isLandingPage && isConnected && !!onVerifyClick && (
                 <button
                   onClick={onVerifyClick}
                   className={`flex items-center gap-1.5 font-mono text-[10px] px-3 py-1.5 border transition-all duration-200 ${

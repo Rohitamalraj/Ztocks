@@ -13,7 +13,7 @@ import { waitForHash } from "@/lib/tx-utils";
 import { CONTRACTS, ASSET_TOKENS, TOKEN_SYMBOL } from "@/lib/contracts";
 import { SYNTH_VAULT_ABI, ERC20_ABI, CUSDC_ABI } from "@/lib/abis";
 import { buildEncryptedVaultInputs, decryptEbool, decryptEuint64, decryptEuint8 } from "@/lib/fhe";
-import type { AssetSymbol } from "@/hooks/use-mock-prices";
+import type { AssetSymbol } from "@/hooks/use-asset-quotes";
 import type { Direction } from "@/hooks/use-positions";
 
 export type TxStatus =

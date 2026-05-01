@@ -1,7 +1,7 @@
 "use client";
 
 import { TrendingUp, TrendingDown } from "lucide-react";
-import type { AssetSymbol, PriceData } from "@/hooks/use-mock-prices";
+import type { AssetSymbol, PriceData } from "@/hooks/use-asset-quotes";
 
 interface PriceTickerProps {
   prices: Record<AssetSymbol, PriceData>;

@@ -41,7 +41,7 @@ export function DashboardNav({ currentTier, onTierChange, showTierMenu, onToggle
           {/* Left: Logo */}
           <div className="flex items-center gap-6">
             <a href="/" className="flex items-center gap-2">
-              <span className="font-display text-2xl tracking-tight">zkSynth</span>
+              <span className="font-display text-2xl tracking-tight">Ztocks</span>
               <span className="text-muted-foreground font-mono text-xs mt-1">ACCESS</span>
             </a>
             

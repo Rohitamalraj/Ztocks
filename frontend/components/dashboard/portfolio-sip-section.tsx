@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { TokenLogo } from "@/components/ui/token-logo";
-import type { AssetSymbol, PriceData } from "@/hooks/use-mock-prices";
+import type { AssetSymbol, PriceData } from "@/hooks/use-asset-quotes";
 import type { SipPlan } from "@/hooks/use-sip-plans";
 
 interface SipOpenPosition {

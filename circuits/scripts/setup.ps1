@@ -7,7 +7,7 @@ $BUILD   = Join-Path $CIRDIR "build"
 $CIRCUIT = "tier_proof"
 $PTAU_PP = Join-Path $BUILD "pot15_pp.ptau"
 
-Write-Host "`n=== zkSynth ZK Circuit Setup ===" -ForegroundColor Cyan
+Write-Host "`n=== Ztocks ZK Circuit Setup ===" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $BUILD | Out-Null
 
 # Step 0: circomlib
@@ -74,7 +74,7 @@ if (Test-Path $PTAU_PP) {
     if (-not $downloaded) {
         Write-Host "  Generating local PoT (demo-only)..." -ForegroundColor Yellow
         & snarkjs powersoftau new bn128 15 $PTAU_RAW -v
-        & snarkjs powersoftau contribute $PTAU_RAW $PTAU_C1 --name="zkSynth" -e="zkSynth$(Get-Random)" -v
+        & snarkjs powersoftau contribute $PTAU_RAW $PTAU_C1 --name="Ztocks" -e="Ztocks$(Get-Random)" -v
         & snarkjs powersoftau prepare phase2 $PTAU_C1 $PTAU_PP -v
         Write-Host "  Local PoT ready" -ForegroundColor Green
     }
@@ -89,7 +89,7 @@ $VKEYFILE  = Join-Path $BUILD "verification_key.json"
 
 & snarkjs groth16 setup $R1CS $PTAU_PP $ZKEY0
 if ($LASTEXITCODE -ne 0) { throw "groth16 setup failed" }
-& snarkjs zkey contribute $ZKEY0 $ZKEYFINAL --name="zkSynth" -e="zkSynth$(Get-Random)"
+& snarkjs zkey contribute $ZKEY0 $ZKEYFINAL --name="Ztocks" -e="Ztocks$(Get-Random)"
 if ($LASTEXITCODE -ne 0) { throw "zkey contribute failed" }
 & snarkjs zkey export verificationkey $ZKEYFINAL $VKEYFILE
 if ($LASTEXITCODE -ne 0) { throw "verificationkey export failed" }

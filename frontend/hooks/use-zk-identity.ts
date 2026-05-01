@@ -91,7 +91,7 @@ export function useZkIdentity() {
     if (!address) { toast.error("Connect your wallet first"); return; }
     setError(null);
     const verificationStartedAt = Date.now();
-    console.group(`%c[zkSynth:identity] startVerification`, "color:#a78bfa;font-weight:bold");
+    console.group(`%c[Ztocks:identity] startVerification`, "color:#a78bfa;font-weight:bold");
     console.log("Wallet:", address);
     void logProofStageToServer("verification-start", { wallet: address });
 
@@ -115,15 +115,16 @@ export function useZkIdentity() {
       console.log("[2/3] Generating Groth16 proof locally (snarkjs)...");
       void logProofStageToServer("proof-generation-start", { wallet: address });
       const proofStartedAt = Date.now();
-      console.time("[zkSynth:identity] proof generation");
+      console.time("[Ztocks:identity] proof generation");
       toast.loading("Generating ZK proof… (~10s)", { id: "zk" });
+      const { generateProof } = await import("@/lib/zk/generate-proof");
       const { a, b, c, pubSignals } = await generateProof(cred, (stage, details) => {
         void logProofStageToServer(stage, {
           wallet: address,
           details,
         });
       });
-      console.timeEnd("[zkSynth:identity] proof generation");
+      console.timeEnd("[Ztocks:identity] proof generation");
       console.log("[2/3] ✓ Proof generated:", { a, b, c, pubSignals });
       void logProofStageToServer("proof-generation-complete", {
         wallet: address,
@@ -183,7 +184,7 @@ export function useZkIdentity() {
       console.groupEnd();
     } catch (err) {
       const msg = err instanceof Error ? err.message.slice(0, 200) : String(err);
-      console.error("[zkSynth:identity] ✗ Error:", err);
+      console.error("[Ztocks:identity] ✗ Error:", err);
       void logProofStageToServer("verification-error", {
         level: "error",
         wallet: address,
@@ -203,7 +204,7 @@ export function useZkIdentity() {
   // ── Read tier from ZKVerifier ────────────────────────────────────────────
   const refreshTier = useCallback(async () => {
     if (!address) return;
-    console.log("[zkSynth:identity] refreshTier for", address);
+    console.log("[Ztocks:identity] refreshTier for", address);
     try {
       const { readContract } = await import("@wagmi/core");
       const { wagmiConfig }  = await import("@/lib/wagmi");
@@ -217,14 +218,14 @@ export function useZkIdentity() {
       const t = Number(result[0]);
       const e = Number(result[1]);
       const now = Math.floor(Date.now() / 1000);
-      console.log("[zkSynth:identity] On-chain tier:", t, "| expiry:", new Date(e * 1000).toISOString(), "| expired:", now > e);
+      console.log("[Ztocks:identity] On-chain tier:", t, "| expiry:", new Date(e * 1000).toISOString(), "| expired:", now > e);
       setTier(t);
       setExpiry(e);
       if (t > 0 && now <= e)  setStatus("verified");
       else if (t > 0)         setStatus("expired");
       else                    setStatus("idle");
     } catch (err) {
-      console.log("[zkSynth:identity] Not yet verified on-chain", err);
+      console.log("[Ztocks:identity] Not yet verified on-chain", err);
     }
   }, [address]);
 
@@ -250,7 +251,7 @@ async function fetchCredential(address: string): Promise<OracleCredential> {
 
   for (const endpoint of endpoints) {
     try {
-      console.log("[zkSynth:oracle] POST", endpoint, "for", address);
+      console.log("[Ztocks:oracle] POST", endpoint, "for", address);
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -267,110 +268,15 @@ async function fetchCredential(address: string): Promise<OracleCredential> {
       }
 
       const cred = (await res.json()) as OracleCredential;
-      console.log("[zkSynth:oracle] ✓ Credential signed — tier:", cred.tier);
+      console.log("[Ztocks:oracle] ✓ Credential signed — tier:", cred.tier);
       return cred;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
-      console.warn("[zkSynth:oracle] endpoint failed:", endpoint, lastError);
+      console.warn("[Ztocks:oracle] endpoint failed:", endpoint, lastError);
     }
   }
 
   throw new Error(lastError);
-}
-
-// ─── Proof generation ─────────────────────────────────────────────────────────
-
-async function generateProof(
-  cred: OracleCredential,
-  onStage?: (stage: string, details?: Record<string, unknown>) => void
-) {
-  onStage?.("proof-load-deps-start");
-  console.log("[zkSynth:proof] Loading snarkjs + circomlibjs...");
-  const snarkjs = (await import("snarkjs")).default ?? await import("snarkjs");
-  const { buildPoseidon } = await import("circomlibjs");
-  onStage?.("proof-load-deps-complete");
-
-  const poseidon = await buildPoseidon();
-  onStage?.("proof-poseidon-ready");
-
-  const walletAddrBI = BigInt(cred.address);
-  const tierBI       = BigInt(cred.tier);
-  const creditScoreNum = Number(cred.creditScore);
-  if (!Number.isInteger(creditScoreNum) || creditScoreNum < 0 || creditScoreNum > 100) {
-    throw new Error("Oracle credential missing valid credit score (expected integer 0-100). Please retry verification.");
-  }
-  const creditScoreBI = BigInt(creditScoreNum);
-  const expiryBI     = BigInt(cred.expiry);
-  const nonceBI      = BigInt(cred.nonce);
-
-  // Compute nullifier = Poseidon(nonce, walletAddr) — must match circuit
-  const nullRaw  = poseidon([nonceBI, walletAddrBI]);
-  const nullifier = poseidon.F.toObject(nullRaw) as bigint;
-  onStage?.("proof-nullifier-computed", { nullifier: nullifier.toString() });
-
-  const input = {
-    // Private
-    walletAddr: walletAddrBI.toString(),
-    tier:       tierBI.toString(),
-    creditScore: creditScoreBI.toString(),
-    expiry:     expiryBI.toString(),
-    nonce:      nonceBI.toString(),
-    sigR8x:     cred.sigR8x,
-    sigR8y:     cred.sigR8y,
-    sigS:       cred.sigS,
-    // Public
-    nullifier:     nullifier.toString(),
-    tierPub:       tierBI.toString(),
-    expiryPub:     expiryBI.toString(),
-    walletAddrPub: walletAddrBI.toString(),
-    Ax:            cred.pubKeyAx,
-    Ay:            cred.pubKeyAy,
-  };
-
-  console.log("[zkSynth:proof] Circuit inputs:", { ...input, sigR8x: "<hidden>", sigR8y: "<hidden>", sigS: "<hidden>" });
-  console.log("[zkSynth:proof] Running groth16.fullProve — loading .wasm + .zkey...");
-  const fullProveStartedAt = Date.now();
-  onStage?.("proof-fullprove-start", {
-    wasm: "/circuits/tier_proof.wasm",
-    zkey: "/circuits/tier_proof.zkey",
-  });
-  const { proof, publicSignals } = await snarkjs.groth16.fullProve(
-    input,
-    "/circuits/tier_proof.wasm",
-    "/circuits/tier_proof.zkey"
-  );
-  onStage?.("proof-fullprove-complete", {
-    durationMs: Date.now() - fullProveStartedAt,
-    publicSignalsCount: publicSignals.length,
-  });
-  console.log("[zkSynth:proof] ✓ Proof object:", proof);
-  console.log("[zkSynth:proof] ✓ Public signals:", publicSignals);
-
-  // Convert to Solidity calldata (hex strings) then to bigint (required by wagmi ABI types)
-  const calldata = await snarkjs.groth16.exportSolidityCallData(proof, publicSignals);
-  const parsed   = JSON.parse(`[${calldata}]`) as [string[], string[][], string[], string[]];
-  onStage?.("proof-calldata-exported");
-
-  const toBigInt2 = (arr: string[]): [bigint, bigint] =>
-    [BigInt(arr[0]), BigInt(arr[1])];
-  const toBigInt22 = (arr: string[][]): [[bigint, bigint], [bigint, bigint]] =>
-    [[BigInt(arr[0][0]), BigInt(arr[0][1])], [BigInt(arr[1][0]), BigInt(arr[1][1])]];
-  const toBigInt6 = (arr: string[]): [bigint, bigint, bigint, bigint, bigint, bigint] =>
-    arr.slice(0, 6).map(BigInt) as [bigint, bigint, bigint, bigint, bigint, bigint];
-
-  onStage?.("proof-arguments-ready", {
-    aLength: parsed[0].length,
-    bOuterLength: parsed[1].length,
-    cLength: parsed[2].length,
-    publicSignalsLength: parsed[3].length,
-  });
-
-  return {
-    a:          toBigInt2(parsed[0]),
-    b:          toBigInt22(parsed[1]),
-    c:          toBigInt2(parsed[2]),
-    pubSignals: toBigInt6(parsed[3]),
-  };
 }
 
 // ─── Wait for tx ──────────────────────────────────────────────────────────────
@@ -398,6 +304,6 @@ async function logProofStageToServer(stage: string, options: ProofServerLogOptio
       }),
     });
   } catch (err) {
-    console.warn("[zkSynth:proof] Failed to send server log", err);
+    console.warn("[Ztocks:proof] Failed to send server log", err);
   }
 }

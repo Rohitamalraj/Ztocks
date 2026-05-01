@@ -1,4 +1,4 @@
-import type { AssetSymbol } from "@/hooks/use-mock-prices";
+import type { AssetSymbol } from "@/hooks/use-asset-quotes";
 
 export const CONTRACTS = {
   // ─── ZK Identity ───────────────────────────────────────────────────────────

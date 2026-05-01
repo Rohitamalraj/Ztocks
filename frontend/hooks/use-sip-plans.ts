@@ -1,10 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { AssetSymbol } from "@/hooks/use-mock-prices";
+import type { AssetSymbol } from "@/hooks/use-asset-quotes";
 import type { Direction } from "@/hooks/use-positions";
 
-const STORAGE_KEY = "zksynth.sip.plans.v1";
+const STORAGE_KEY = "ztocks.sip.plans.v1";
 
 export type SipFrequency = "DAILY" | "WEEKLY" | "MONTHLY";
 

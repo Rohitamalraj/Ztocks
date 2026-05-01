@@ -30,7 +30,7 @@ export function CandlestickChart({
   
   const [activeTab, setActiveTab] = useState<'price' | 'depth'>('price')
   
-  // The ticker in zkSynth has an 's' prefix (e.g. sAAPL). Finnhub needs 'AAPL'.
+  // Our synthetic tickers use an 's' prefix (e.g. sAAPL). Finnhub needs 'AAPL'.
   const realTicker = ticker.startsWith('s') ? ticker.slice(1) : ticker;
   const { data, loading, error } = useFinnhubCandles(realTicker, selectedTimeframe, true);
   const currentPrice = data && data.length > 0 ? data[data.length - 1].close : 0;

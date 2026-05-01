@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useAccount } from "wagmi";
 import { AppNav } from "@/components/app/app-nav";
 import { TradingLayout } from "@/components/dashboard/trading-layout";
@@ -9,13 +10,17 @@ import { CandlestickChart } from "@/components/dashboard/candlestick-chart";
 import { TradeForm } from "@/components/dashboard/trade-form";
 import { StatsBar } from "@/components/dashboard/stats-bar";
 import { PositionsPanel } from "@/components/dashboard/positions-panel";
-import { VerifyIdentityModal } from "@/components/dashboard/verify-identity-modal";
-import { useMockPrices } from "@/hooks/use-mock-prices";
+import { useAssetQuotes } from "@/hooks/use-asset-quotes";
+import { useKycTier } from "@/hooks/use-kyc-tier";
 import { useVault } from "@/hooks/use-vault";
-import { useZkIdentity } from "@/hooks/use-zk-identity";
 import { ASSET_TOKENS } from "@/lib/contracts";
 import { isUsEquityMarketOpen } from "@/lib/market-hours";
-import type { AssetSymbol } from "@/hooks/use-mock-prices";
+import type { AssetSymbol } from "@/hooks/use-asset-quotes";
+
+const VerifyIdentityModal = dynamic(
+  () => import("@/components/dashboard/verify-identity-modal").then((m) => m.VerifyIdentityModal),
+  { ssr: false }
+);
 
 // Static market metadata for listed synth assets
 const MARKET_META: Record<AssetSymbol, { name: string }> = {
@@ -50,11 +55,13 @@ export default function TradePage() {
   const [favorites, setFavorites] = useState<Set<AssetSymbol>>(new Set());
 
   // ─── Data hooks ────────────────────────────────────────────────────────────
-  const prices    = useMockPrices();
+  const prices    = useAssetQuotes();
   const vault     = useVault();
-  const identity  = useZkIdentity();
 
-  const { isVerified, leverageCap, tier } = identity;
+  const kyc = useKycTier();
+  const isVerified = kyc.isVerified;
+  const tier = kyc.tier;
+  const leverageCap = kyc.leverageCap;
   const selectedPrice = prices[selectedAsset]?.price ?? 0;
   const marketOpen = isUsEquityMarketOpen();
   const isTradeEnabled = !!ASSET_TOKENS[selectedAsset];
@@ -222,11 +229,12 @@ export default function TradePage() {
         }
       />
 
-      <VerifyIdentityModal
-        open={verifyModalOpen}
-        onOpenChange={setVerifyModalOpen}
-        identityState={identity}
-      />
+      {verifyModalOpen && (
+        <VerifyIdentityModal
+          open={verifyModalOpen}
+          onOpenChange={setVerifyModalOpen}
+        />
+      )}
     </div>
   );
 }

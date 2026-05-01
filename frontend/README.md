@@ -1,4 +1,4 @@
-# zkSynth Frontend
+# Ztocks Frontend
 
 > **Next.js 16 frontend for privacy-preserving synthetic asset trading**
 
@@ -112,7 +112,7 @@ frontend/
 │   ├── use-kyc-tier.ts       # KYC tier queries
 │   ├── use-positions.ts      # Position management
 │   ├── use-sip-plans.ts      # SIP plan storage
-│   ├── use-mock-prices.ts    # Price feed integration
+│   ├── use-asset-quotes.ts   # Live quote polling
 │   ├── use-chart-data.ts     # Chart data fetching
 │   ├── use-debounce.ts       # Debounce utility
 │   └── useFinnhubCandles.ts  # Finnhub API integration
@@ -292,7 +292,7 @@ npm run lint
 - Direction: LONG only (DCA mode)
 - Leverage: 1x fixed
 - Frequencies: DAILY, WEEKLY, MONTHLY
-- Storage: Local storage (`zksynth.sip.plans.v1`)
+- Storage: Local storage (`ztocks.sip.plans.v1`)
 
 ---
 
@@ -466,24 +466,21 @@ togglePlan(planId);
 markPlanExecuted(planId);
 ```
 
-### useMockPrices (`hooks/use-mock-prices.ts`)
+### useAssetQuotes (`hooks/use-asset-quotes.ts`)
 
 Real-time price feed integration.
 
 ```tsx
-const prices = useMockPrices();
+const prices = useAssetQuotes();
 
 // Access prices
 prices["sAAPL"].price          // Current price
 prices["sAAPL"].changePercent  // 24h change %
-prices["sAAPL"].timestamp      // Last update
 ```
 
 **Data Sources:**
-1. Backend API (`/api/price`)
+1. Next.js API (`/api/stocks/quotes`)
 2. Finnhub API (stocks)
-3. Bybit API (crypto)
-4. Mock fallback
 
 ---
 
@@ -496,7 +493,7 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { hashkeyTestnet } from './chains';
 
 export const config = getDefaultConfig({
-  appName: 'zkSynth Access',
+  appName: 'Ztocks',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID!,
   chains: [hashkeyTestnet],
   ssr: true,

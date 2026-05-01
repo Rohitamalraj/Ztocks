@@ -9,7 +9,7 @@
     "clean": "rm -rf dist"
   },
   "keywords": [
-    "zksynth",
+    "ztocks",
     "zk-proofs",
     "kyc",
     "synthetic-assets"

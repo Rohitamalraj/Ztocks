@@ -2,7 +2,7 @@
 
 import type { Position } from "@/hooks/use-positions";
 import { calcPnl } from "@/hooks/use-positions";
-import type { AssetSymbol, PriceData } from "@/hooks/use-mock-prices";
+import type { AssetSymbol, PriceData } from "@/hooks/use-asset-quotes";
 import type { TierKey } from "./dashboard-nav";
 import { TIERS } from "./dashboard-nav";
 

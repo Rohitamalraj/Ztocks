@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { AssetSymbol, PriceData } from "./use-mock-prices";
+import type { AssetSymbol, PriceData } from "./use-asset-quotes";
 
 export type Direction = "LONG" | "SHORT";
 

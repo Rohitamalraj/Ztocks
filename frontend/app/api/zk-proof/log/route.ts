@@ -30,14 +30,14 @@ export async function POST(req: NextRequest) {
     };
 
     if (level === "error") {
-      console.error("[zkSynth:proof:server]", entry);
+      console.error("[Ztocks:proof:server]", entry);
     } else {
-      console.log("[zkSynth:proof:server]", entry);
+      console.log("[Ztocks:proof:server]", entry);
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[zkSynth:proof:server] Invalid payload", err);
+    console.error("[Ztocks:proof:server] Invalid payload", err);
     return NextResponse.json({ ok: false, error: "Invalid payload" }, { status: 400 });
   }
 }

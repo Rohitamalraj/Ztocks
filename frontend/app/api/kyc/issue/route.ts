@@ -103,7 +103,7 @@ async function determineTier(address: `0x${string}`): Promise<CreditScoreAssessm
   try {
     txCount = await client.getTransactionCount({ address });
   } catch (err) {
-    console.warn("[zkSynth:oracle] tx count failed:", err);
+    console.warn("[Ztocks:oracle] tx count failed:", err);
   }
 
   try {

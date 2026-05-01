@@ -3,14 +3,19 @@
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { AppNav } from "@/components/app/app-nav";
-import { VerifyIdentityModal } from "@/components/dashboard/verify-identity-modal";
 import { TokenLogo } from "@/components/ui/token-logo";
 import { useVault } from "@/hooks/use-vault";
-import { useMockPrices } from "@/hooks/use-mock-prices";
-import { useZkIdentity } from "@/hooks/use-zk-identity";
+import { useAssetQuotes } from "@/hooks/use-asset-quotes";
+import { useKycTier } from "@/hooks/use-kyc-tier";
 import { Loader2 } from "lucide-react";
-import type { AssetSymbol } from "@/hooks/use-mock-prices";
+import type { AssetSymbol } from "@/hooks/use-asset-quotes";
+
+const VerifyIdentityModal = dynamic(
+  () => import("@/components/dashboard/verify-identity-modal").then((m) => m.VerifyIdentityModal),
+  { ssr: false }
+);
 
 function formatPnL(value: number): string {
   const abs = Math.abs(value);
@@ -40,8 +45,8 @@ export default function PortfolioPage() {
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
 
   const vault    = useVault();
-  const prices   = useMockPrices();
-  const identity = useZkIdentity();
+  const prices   = useAssetQuotes();
+  const kyc = useKycTier();
 
   // Enrich positions with live mark price + P&L
   const enrichedPositions = vault.positions.map((pos) => {
@@ -95,7 +100,7 @@ export default function PortfolioPage() {
   if (!isConnected) {
     return (
       <>
-        <AppNav onVerifyClick={() => setVerifyModalOpen(true)} isVerified={identity.isVerified} tier={identity.tier} />
+        <AppNav onVerifyClick={() => setVerifyModalOpen(true)} isVerified={kyc.isVerified} tier={kyc.tier} />
         <div className="min-h-screen bg-background flex items-center justify-center pt-16">
           <div className="text-center space-y-4">
             <h1 className="text-2xl font-mono">Connect Wallet</h1>
@@ -107,11 +112,12 @@ export default function PortfolioPage() {
             </Link>
           </div>
         </div>
-        <VerifyIdentityModal
-          open={verifyModalOpen}
-          onOpenChange={setVerifyModalOpen}
-          identityState={identity}
-        />
+        {verifyModalOpen && (
+          <VerifyIdentityModal
+            open={verifyModalOpen}
+            onOpenChange={setVerifyModalOpen}
+          />
+        )}
       </>
     );
   }
@@ -120,8 +126,8 @@ export default function PortfolioPage() {
     <div className="min-h-screen bg-background pt-16">
       <AppNav
         onVerifyClick={() => setVerifyModalOpen(true)}
-        isVerified={identity.isVerified}
-        tier={identity.tier}
+        isVerified={kyc.isVerified}
+        tier={kyc.tier}
         usdcBalance={vault.usdcBalance}
       />
 
@@ -292,11 +298,12 @@ export default function PortfolioPage() {
         )}
       </div>
 
-      <VerifyIdentityModal
-        open={verifyModalOpen}
-        onOpenChange={setVerifyModalOpen}
-        identityState={identity}
-      />
+      {verifyModalOpen && (
+        <VerifyIdentityModal
+          open={verifyModalOpen}
+          onOpenChange={setVerifyModalOpen}
+        />
+      )}
     </div>
   );
 }

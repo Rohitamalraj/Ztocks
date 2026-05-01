@@ -1,8 +1,8 @@
-# zkSynth Backend Server
+# Ztocks Backend Server
 
-> **Express.js backend services for zkSynth Access**
+> **Express.js backend services for Ztocks**
 
-Simple Express.js backend server for zkSynth with two main functions:
+Simple Express.js backend server for Ztocks with two main functions:
 
 1. **KYC Oracle** - Signs KYC credentials with Baby Jubjub EdDSA for ZK proof generation
 2. **Price Oracle** - Provides real-time prices for synthetic assets (stocks + crypto)
@@ -373,7 +373,7 @@ curl http://localhost:3001/api/price?tickers=BTC,ETH,AAPL
 Default CORS allows `http://localhost:3000`. Update `FRONTEND_URL` for production:
 
 ```bash
-FRONTEND_URL=https://zksynth.vercel.app
+FRONTEND_URL=https://ztocks.vercel.app
 ```
 
 ### Rate Limiting

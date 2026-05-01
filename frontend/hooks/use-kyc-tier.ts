@@ -25,14 +25,23 @@ export function useKycTier() {
     query: { enabled: isConnected && !!address },
   });
 
-  const [tier] = (tierData as [number, bigint] | undefined) ?? [0, 0n];
+  const [tier, expiry] = (tierData as [number, bigint] | undefined) ?? [0, 0n];
   const capMap: Record<number, number> = { 1: 2, 2: 5, 3: 8, 4: 10 };
   const cap = capMap[tier] ?? 0;
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiryNum = Number(expiry);
+  const isExpired = tier > 0 && expiryNum > 0 && now > expiryNum;
+  const isVerified = tier > 0 && !isExpired;
 
   return {
     isConnected,
     address,
+    tier,
+    expiry: expiryNum,
     isEligible: tier > 0,
+    isExpired,
+    isVerified,
     leverageCap: cap,
     tierKey: cap > 0 ? capToTierKey(cap) : "BASIC" as TierKey,
     isLoading,

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { ArrowRight, AlertCircle, ShieldAlert } from "lucide-react";
 import { useAccount } from "wagmi";
-import type { AssetSymbol, PriceData } from "@/hooks/use-mock-prices";
+import type { AssetSymbol, PriceData } from "@/hooks/use-asset-quotes";
 import type { Direction } from "@/hooks/use-positions";
 import type { TierKey } from "./dashboard-nav";
 import { TIERS } from "./dashboard-nav";
