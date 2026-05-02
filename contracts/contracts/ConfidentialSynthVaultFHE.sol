@@ -11,7 +11,6 @@ import "@fhevm/solidity/config/ZamaConfig.sol";
 import "./ZKVerifier.sol";
 import "./ConfidentialTierManager.sol";
 import "./ConfidentialSynthToken.sol";
-import "./FeeModule.sol";
 import "./ConfidentialUSDC.sol";
 
 /// @title ConfidentialSynthVaultFHE
@@ -45,7 +44,6 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     ZKVerifier                public immutable zkVerifier;
     ConfidentialTierManager   public immutable tierManager;
     ConfidentialUSDC          public immutable collateralToken;
-    FeeModule                 public feeModule;
 
     // ─── State ───────────────────────────────────────────────────────────────
     /// @dev Registered synth tokens that can be traded.
@@ -88,7 +86,6 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     );
 
     event AssetRegistered(address indexed synthToken);
-    event FeeModuleUpdated(address indexed feeModule);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
     error NotEligible(address user);
@@ -106,8 +103,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     constructor(
         address zkVerifierAddress,
         address tierManagerAddress,
-        address collateralTokenAddress,
-        address feeModuleAddress
+        address collateralTokenAddress
     ) Ownable(msg.sender) ZamaEthereumConfig() {
         require(zkVerifierAddress   != address(0), "ConfidentialSynthVaultFHE: zero zkVerifier");
         require(tierManagerAddress  != address(0), "ConfidentialSynthVaultFHE: zero tierManager");
@@ -116,7 +112,6 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         zkVerifier  = ZKVerifier(zkVerifierAddress);
         tierManager = ConfidentialTierManager(tierManagerAddress);
         collateralToken = ConfidentialUSDC(collateralTokenAddress);
-        feeModule   = FeeModule(feeModuleAddress);
     }
 
     // ─── Admin ───────────────────────────────────────────────────────────────
@@ -126,12 +121,6 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         require(synthToken != address(0), "ConfidentialSynthVaultFHE: zero address");
         registeredAssets[synthToken] = true;
         emit AssetRegistered(synthToken);
-    }
-
-    /// @notice Update the fee module address (owner only).
-    function setFeeModule(address feeModuleAddress) external onlyOwner {
-        feeModule = FeeModule(feeModuleAddress);
-        emit FeeModuleUpdated(feeModuleAddress);
     }
 
     /// @notice Pause all trading in an emergency.
@@ -280,20 +269,15 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         euint64 wrappedCollateral = collateralToken.wrap(address(this), collateralUSDC);
         FHE.allowThis(wrappedCollateral);
 
-        // 6. Collect opening fee
-        if (address(feeModule) != address(0)) {
-            feeModule.collectOpenFee(msg.sender, collateralUSDC);
-        }
-
-        // 7. Calculate position size (hybrid: some plaintext, leverage encrypted)
+        // 6. Calculate position size (hybrid: some plaintext, leverage encrypted)
         uint256 positionSizeUSDC = collateralUSDC * 5; // Assume max 5x for demo
         uint256 synthAmountCalc = (positionSizeUSDC * 1e20) / executionPrice;
 
-        // 8. Mint confidential synth tokens (encrypted amount)
+        // 7. Mint confidential synth tokens (encrypted amount)
         euint64 encSynthAmount = FHE.asEuint64(uint64(synthAmountCalc));
         ConfidentialSynthToken(synthToken).mint(msg.sender, encSynthAmount);
 
-        // 9. Store position with encrypted leverage
+        // 8. Store position with encrypted leverage
         uint256 positionId = positions[msg.sender].length;
         positions[msg.sender].push(EncryptedPosition({
             asset:          synthToken,
@@ -306,7 +290,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
             isOpen:         true
         }));
 
-        // 10. Allow user to decrypt
+        // 9. Allow user to decrypt
         FHE.allow(leverage, msg.sender);
         FHE.allow(wrappedCollateral, msg.sender);
 

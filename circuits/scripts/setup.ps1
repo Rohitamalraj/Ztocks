@@ -95,9 +95,9 @@ if ($LASTEXITCODE -ne 0) { throw "zkey contribute failed" }
 if ($LASTEXITCODE -ne 0) { throw "verificationkey export failed" }
 Write-Host "  Setup complete" -ForegroundColor Green
 
-# Step 6: Export Solidity verifier
+# Step 6: Export Solidity verifier (must match contracts/hardhat layout)
 Write-Host "[6/7] Generating Groth16Verifier.sol..." -ForegroundColor Yellow
-$SOL_OUT = Join-Path $ROOT "contracts\src\Groth16Verifier.sol"
+$SOL_OUT = Join-Path $ROOT "contracts\contracts\Groth16Verifier.sol"
 & snarkjs zkey export solidityverifier $ZKEYFINAL $SOL_OUT
 if ($LASTEXITCODE -ne 0) { throw "solidityverifier export failed" }
 Write-Host "  Written: $SOL_OUT" -ForegroundColor Green

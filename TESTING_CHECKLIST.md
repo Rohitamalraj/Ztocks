@@ -123,17 +123,17 @@
 
 ### 9. **Unwrap cUSDC → USDC** 🔄
 
-- [ ] Click "Unwrap cUSDC"
-- [ ] Enter amount
-- [ ] Request unwrap (Step 1)
-- [ ] Wait for relayer (~30 seconds)
-- [ ] Unwrap finalizes (Step 2)
-- [ ] USDC balance updates
+*(Portfolio → “Withdraw USDC” — encrypts unwrap amount via fhevmjs, then `@zama-fhe/relayer-sdk` public decrypt + `finalizeUnwrap` per [Zama wrapper docs](https://docs.zama.org/protocol/protocol-apps/confidential-tokens/confidential-wrapper).)*
+
+- [ ] Open **Portfolio** with wallet connected on Sepolia
+- [ ] Enter USDC amount to withdraw from cUSDC
+- [ ] Submit **Withdraw USDC** (step 1: `unwrap`; wait while relayer decrypts — can take tens of seconds)
+- [ ] App auto-runs finalize (step 2: `finalizeUnwrap`)
+- [ ] USDC balance updates after success
 
 **Expected**:
-- 2 steps: request + finalize
-- Total gas: ~0.0015 ETH
-- Async process (requires relayer)
+- 2 on-chain txs: unwrap request → finalize unwrap
+- Relayer waits are normal (`not_ready` is retried in-app)
 
 ---
 
@@ -161,7 +161,8 @@ Verify on Etherscan:
 - ✅ Events emitted
 - ✅ State changes recorded
 
-**Vault**: https://sepolia.etherscan.io/address/0xb423EB8C27524CFbCB2A70E81468a963968dE66B
+**Synth vault (Sepolia)** — mirror `contracts/deployments/sepolia.json` (`ConfidentialSynthVaultFHE`):  
+https://sepolia.etherscan.io/address/0x5C830f25C41dc9Ae282f4F2fE20CF723Ae1cacE9
 
 ---
 

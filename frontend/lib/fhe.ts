@@ -7,67 +7,99 @@ type EncryptedInput = {
   inputProof: Hex;
 };
 
-type FhevmApi = {
+type FhevmInstance = {
   createEncryptedInput: (contractAddress: string, userAddress: string) => {
-    addBool: (value: boolean) => void;
-    add8: (value: number | bigint) => void;
-    add64: (value: number | bigint) => void;
-    encrypt: () => Promise<EncryptedInput>;
+    addBool:  (value: boolean) => void;
+    add8:     (value: number | bigint) => void;
+    add64:    (value: number | bigint) => void;
+    encrypt:  () => Promise<EncryptedInput>;
   };
-  userDecryptEbool?: (handle: Hex, contractAddress: string, signer: unknown) => Promise<boolean>;
-  userDecryptEuint?: (type: unknown, handle: Hex, contractAddress: string, signer: unknown) => Promise<bigint>;
-  userDecryptEuint8?: (handle: Hex, contractAddress: string, signer: unknown) => Promise<bigint>;
+  userDecryptEbool?:   (handle: Hex, contractAddress: string, signer: unknown) => Promise<boolean>;
+  userDecryptEuint8?:  (handle: Hex, contractAddress: string, signer: unknown) => Promise<bigint>;
   userDecryptEuint64?: (handle: Hex, contractAddress: string, signer: unknown) => Promise<bigint>;
+  userDecryptEuint?:   (type: unknown, handle: Hex, contractAddress: string, signer: unknown) => Promise<bigint>;
   FhevmType?: Record<string, unknown>;
 };
 
-let apiPromise: Promise<FhevmApi> | null = null;
+let instancePromise: Promise<FhevmInstance> | null = null;
 
-async function resolveFhevmApi(): Promise<FhevmApi> {
-  if (apiPromise) return apiPromise;
+/**
+ * Initialize fhevmjs with Zama's SepoliaConfig.
+ * SepoliaConfig includes:
+ *   - Gateway:  https://gateway.sepolia.zama.ai/
+ *   - Relayer:  https://relayer.testnet.zama.org
+ *   - Chain ID: 11155111
+ */
+async function getInstance(): Promise<FhevmInstance> {
+  if (instancePromise) return instancePromise;
 
-  apiPromise = (async () => {
+  instancePromise = (async () => {
+    // Step 1: Initialize libsodium WASM (must be ready before fhevmjs)
+    try {
+      const sodium = await import("libsodium-wrappers");
+      await sodium.ready;
+    } catch {
+      console.warn("[fhe] libsodium-wrappers not available; fhevmjs may use fallback");
+    }
+
     const mod: any = await import("fhevmjs");
 
+    const provider = (globalThis as any).ethereum;
+    if (!provider) {
+      throw new Error("FHE encryption requires a browser wallet (MetaMask).");
+    }
+
+    // Try SepoliaConfig first (new fhevmjs API)
+    if (mod.SepoliaConfig && typeof mod.createInstance === "function") {
+      const instance = await mod.createInstance({
+        ...mod.SepoliaConfig,
+        network: provider,
+      });
+      return instance as FhevmInstance;
+    }
+
+    // Fallback: older createInstance API
     if (typeof mod.createInstance === "function") {
-      const provider = (globalThis as any).ethereum;
-      if (!provider) {
-        throw new Error("FHE encryption requires a browser wallet provider.");
-      }
       const chainIdHex = await provider.request({ method: "eth_chainId" });
-      const chainId = Number.parseInt(chainIdHex, 16);
-      const publicKey = typeof mod.getPublicKey === "function" ? await mod.getPublicKey(provider) : undefined;
+      const chainId    = Number.parseInt(chainIdHex, 16);
+      const publicKey  = typeof mod.getPublicKey === "function"
+        ? await mod.getPublicKey(provider)
+        : undefined;
+
       const instance = await mod.createInstance({
         chainId,
         publicKey,
-        network: provider,
+        network:    provider,
+        gatewayUrl: "https://gateway.sepolia.zama.ai/",
       });
-      return instance as FhevmApi;
+      return instance as FhevmInstance;
     }
 
-    if (mod.fhevm?.createEncryptedInput) {
-      return mod.fhevm as FhevmApi;
-    }
+    // Module-level API (some build outputs)
+    if (mod.fhevm?.createEncryptedInput) return mod.fhevm as FhevmInstance;
+    if (mod.default?.createEncryptedInput) return mod.default as FhevmInstance;
 
-    if (mod.default?.createEncryptedInput) {
-      return mod.default as FhevmApi;
-    }
-
-    throw new Error("Unsupported fhevmjs API surface.");
+    throw new Error("Unsupported fhevmjs API — please update the package.");
   })();
 
-  return apiPromise;
+  return instancePromise;
 }
 
+// ─── Public helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Build encrypted inputs for openPosition():
+ *   encIsLong, encCollateralUSDC, encLeverage, encExecutionPrice
+ */
 export async function buildEncryptedVaultInputs(params: {
   contractAddress: string;
-  userAddress: string;
-  isLong: boolean;
-  collateral: bigint;
-  leverage: number;
-  executionPrice: bigint;
+  userAddress:     string;
+  isLong:          boolean;
+  collateral:      bigint;
+  leverage:        number;
+  executionPrice:  bigint;
 }): Promise<EncryptedInput> {
-  const api = await resolveFhevmApi();
+  const api   = await getInstance();
   const input = api.createEncryptedInput(params.contractAddress, params.userAddress);
   input.addBool(params.isLong);
   input.add64(params.collateral);
@@ -76,35 +108,44 @@ export async function buildEncryptedVaultInputs(params: {
   return input.encrypt();
 }
 
-export async function decryptEbool(handle: Hex, contractAddress: string, signer: unknown): Promise<boolean | null> {
-  if (!handle || handle === "0x" + "0".repeat(64)) return null;
-  const api = await resolveFhevmApi();
-  if (typeof api.userDecryptEbool === "function") {
-    return api.userDecryptEbool(handle, contractAddress, signer);
-  }
-  return null;
+/** Single `euint64` encrypted input (e.g. cUSDC unwrap amount). */
+export async function buildEncryptedEuint64(params: {
+  contractAddress: string;
+  userAddress:     string;
+  amount:          bigint;
+}): Promise<EncryptedInput> {
+  const api   = await getInstance();
+  const input = api.createEncryptedInput(params.contractAddress, params.userAddress);
+  input.add64(params.amount);
+  return input.encrypt();
 }
 
-export async function decryptEuint64(handle: Hex, contractAddress: string, signer: unknown): Promise<bigint | null> {
+export async function decryptEbool(
+  handle: Hex, contractAddress: string, signer: unknown
+): Promise<boolean | null> {
   if (!handle || handle === "0x" + "0".repeat(64)) return null;
-  const api = await resolveFhevmApi();
-  if (typeof api.userDecryptEuint64 === "function") {
-    return api.userDecryptEuint64(handle, contractAddress, signer);
-  }
-  if (typeof api.userDecryptEuint === "function" && api.FhevmType?.euint64) {
+  const api = await getInstance();
+  return api.userDecryptEbool?.(handle, contractAddress, signer) ?? null;
+}
+
+export async function decryptEuint64(
+  handle: Hex, contractAddress: string, signer: unknown
+): Promise<bigint | null> {
+  if (!handle || handle === "0x" + "0".repeat(64)) return null;
+  const api = await getInstance();
+  if (api.userDecryptEuint64) return api.userDecryptEuint64(handle, contractAddress, signer);
+  if (api.userDecryptEuint && api.FhevmType?.euint64)
     return api.userDecryptEuint(api.FhevmType.euint64, handle, contractAddress, signer);
-  }
   return null;
 }
 
-export async function decryptEuint8(handle: Hex, contractAddress: string, signer: unknown): Promise<bigint | null> {
+export async function decryptEuint8(
+  handle: Hex, contractAddress: string, signer: unknown
+): Promise<bigint | null> {
   if (!handle || handle === "0x" + "0".repeat(64)) return null;
-  const api = await resolveFhevmApi();
-  if (typeof api.userDecryptEuint8 === "function") {
-    return api.userDecryptEuint8(handle, contractAddress, signer);
-  }
-  if (typeof api.userDecryptEuint === "function" && api.FhevmType?.euint8) {
+  const api = await getInstance();
+  if (api.userDecryptEuint8) return api.userDecryptEuint8(handle, contractAddress, signer);
+  if (api.userDecryptEuint && api.FhevmType?.euint8)
     return api.userDecryptEuint(api.FhevmType.euint8, handle, contractAddress, signer);
-  }
   return null;
 }

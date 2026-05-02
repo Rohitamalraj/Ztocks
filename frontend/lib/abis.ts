@@ -29,6 +29,27 @@ export const ZK_VERIFIER_ABI = [
     ],
   },
   {
+    name: "getMaxLeverage",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "tier", type: "uint8" }],
+    outputs: [{ name: "", type: "uint8" }],
+  },
+  {
+    name: "userTier",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint8" }],
+  },
+  {
+    name: "userProofExpiry",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
     name: "TierVerified",
     type: "event",
     inputs: [
@@ -140,7 +161,39 @@ export const CUSDC_ABI = [
       { name: "to", type: "address" },
       { name: "amount", type: "uint256" },
     ],
-    outputs: [{ name: "", type: "bytes32" }],
+    outputs: [{ name: "wrappedAmountSent", type: "bytes32" }],
+  },
+  {
+    name: "unwrap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "from", type: "address" },
+      { name: "to", type: "address" },
+      { name: "encryptedAmount", type: "bytes32" },
+      { name: "inputProof", type: "bytes" },
+    ],
+    outputs: [{ name: "unwrapRequestId", type: "bytes32" }],
+  },
+  {
+    name: "finalizeUnwrap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "unwrapRequestId", type: "bytes32" },
+      { name: "unwrapAmountCleartext", type: "uint64" },
+      { name: "decryptionProof", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "UnwrapRequested",
+    type: "event",
+    inputs: [
+      { name: "receiver", type: "address", indexed: true },
+      { name: "unwrapRequestId", type: "bytes32", indexed: true },
+      { name: "amount", type: "bytes32", indexed: false },
+    ],
   },
   {
     name: "setOperator",
@@ -164,16 +217,6 @@ export const CUSDC_ABI = [
   },
   {
     name: "underlying",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "address" }],
-  },
-] as const;
-
-export const FEE_MODULE_ABI = [
-  {
-    name: "feeToken",
     type: "function",
     stateMutability: "view",
     inputs: [],

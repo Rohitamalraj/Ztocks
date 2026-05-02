@@ -33,36 +33,24 @@ const nextConfig: NextConfig = {
       "web-worker": path.resolve(__dirname, "node_modules/web-worker/cjs/browser.js"),
       "web-worker/cjs/node": path.resolve(__dirname, "node_modules/web-worker/cjs/browser.js"),
       "web-worker/cjs/node.js": path.resolve(__dirname, "node_modules/web-worker/cjs/browser.js"),
+      // libsodium-wrappers ESM entry imports ./libsodium.mjs which webpack often fails to resolve
+      "libsodium-wrappers": path.resolve(
+        __dirname,
+        "node_modules/libsodium-wrappers/dist/modules/libsodium-wrappers.js"
+      ),
     };
 
-    // Handle WASM files
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
       layers: true,
     };
 
-    // Add rule for WASM files
-    config.module.rules.push({
-      test: /\.wasm$/,
-      type: "webassembly/async",
-    });
+    // Note: libsodium and tfhe WASM must load at runtime for fhevmjs to work.
+    // Do NOT stub these out — fhevmjs needs the real WASM files.
 
-    // Stub out problematic modules that don't exist in the package
-    config.plugins.push(
-      new webpack.NormalModuleReplacementPlugin(
-        /libsodium\.mjs$/,
-        path.resolve(__dirname, 'lib/stubs/libsodium-stub.js')
-      ),
-      new webpack.NormalModuleReplacementPlugin(
-        /tfhe_bg\.wasm$/,
-        path.resolve(__dirname, 'lib/stubs/tfhe-stub.js')
-      )
-    );
-
-    // Exclude fhevmjs from server-side rendering
     if (isServer) {
-      config.externals = [...(config.externals || []), 'fhevmjs', 'libsodium-wrappers'];
+      config.externals = [...(config.externals || []), "fhevmjs", "libsodium-wrappers"];
     }
 
     return config;

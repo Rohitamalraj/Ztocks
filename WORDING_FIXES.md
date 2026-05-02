@@ -15,10 +15,10 @@
 ### 2. Core Innovation Section
 
 **❌ CURRENT (Overstated):**
-> "zkSynth on Zama uses Fully Homomorphic Encryption to keep your entire trading position encrypted on-chain — while the smart contract enforces leverage caps, calculates P&L, and checks liquidation thresholds directly on the encrypted data. The contract never decrypts your position."
+> "Ztocks on Zama uses Fully Homomorphic Encryption to keep your entire trading position encrypted on-chain — while the smart contract enforces leverage caps, calculates P&L, and checks liquidation thresholds directly on the encrypted data. The contract never decrypts your position."
 
 **✅ CORRECTED:**
-> "zkSynth combines zero-knowledge proofs for identity privacy with an FHE-ready architecture for position confidentiality. Our current implementation uses ZK-verified tier enforcement on Sepolia, with full FHE encryption planned for Zama devnet deployment. The contract enforces leverage caps based on your ZK-proven tier without revealing your credit score or personal data."
+> "Ztocks combines zero-knowledge proofs for identity privacy with an FHE-ready architecture for position confidentiality. Our current implementation uses ZK-verified tier enforcement on Sepolia, with full FHE encryption planned for Zama devnet deployment. The contract enforces leverage caps based on your ZK-proven tier without revealing your credit score or personal data."
 
 ---
 
@@ -26,7 +26,7 @@
 
 **❌ CURRENT (Misleading):**
 ```
-With zkSynth × Zama FHE:
+With Ztocks × Zama FHE:
 collateral = euint256(encrypted)   ← hidden
 leverage   = euint8(encrypted)     ← hidden
 direction  = ebool(encrypted)      ← hidden
@@ -36,7 +36,7 @@ direction  = ebool(encrypted)      ← hidden
 
 **✅ CORRECTED:**
 ```
-With zkSynth (Current + Roadmap):
+With Ztocks (Current + Roadmap):
 ✅ LIVE: ZK-verified tier → leverage cap enforced without revealing identity
 🚧 ROADMAP: FHE-encrypted positions → collateral/leverage hidden from validators
 
@@ -83,12 +83,12 @@ direction  = ebool(encrypted)               ← FHE-ready architecture
 **❌ CURRENT (Claims FHE is live):**
 | Protocol | Privacy | MEV Protection | Compliance | FHE | Leveraged Synths |
 |----------|---------|----------------|------------|-----|------------------|
-| zkSynth × Zama | ✅ FHE full | ✅ MEV-proof | ✅ Tier-gated | ✅ | ✅ |
+| Ztocks × Zama | ✅ FHE full | ✅ MEV-proof | ✅ Tier-gated | ✅ | ✅ |
 
 **✅ CORRECTED:**
 | Protocol | Identity Privacy | Position Privacy | Compliance | ZK | FHE | Leveraged Synths |
 |----------|------------------|------------------|------------|-----|-----|------------------|
-| zkSynth | ✅ ZK proofs | 🚧 FHE-ready | ✅ Tier-gated | ✅ | 🚧 | ✅ |
+| Ztocks | ✅ ZK proofs | 🚧 FHE-ready | ✅ Tier-gated | ✅ | 🚧 | ✅ |
 
 ---
 
@@ -164,7 +164,7 @@ direction  = ebool(encrypted)               ← FHE-ready architecture
 > "FHE is stronger than ZK proofs: ZK proves a fact about private data; FHE computes a result from private data"
 
 **✅ USE:**
-> "FHE complements ZK proofs: ZK proves statements about private data (identity verification), while FHE enables computation on private data (position management). zkSynth combines both for a complete privacy solution."
+> "FHE complements ZK proofs: ZK proves statements about private data (identity verification), while FHE enables computation on private data (position management). Ztocks combines both for a complete privacy solution."
 
 ---
 
@@ -211,7 +211,7 @@ direction  = ebool(encrypted)               ← FHE-ready architecture
 ## Recommended Positioning
 
 ### Elevator Pitch (30 seconds):
-"zkSynth is a confidential synthetic trading protocol that combines zero-knowledge proofs for identity privacy with an FHE-ready architecture for position confidentiality. We've built a production-ready ZK identity layer that verifies your KYC tier without revealing your credit score, and we're integrating Zama's FHE to encrypt your position data end-to-end. This solves the institutional privacy barrier that's kept DeFi adoption flat at 40%."
+"Ztocks is a confidential synthetic trading protocol that combines zero-knowledge proofs for identity privacy with an FHE-ready architecture for position confidentiality. We've built a production-ready ZK identity layer that verifies your KYC tier without revealing your credit score, and we're integrating Zama's FHE to encrypt your position data end-to-end. This solves the institutional privacy barrier that's kept DeFi adoption flat at 40%."
 
 ### Technical Pitch (60 seconds):
 "Our ZK circuit uses Groth16 proofs to verify your accreditation tier without revealing personal data. The contract enforces leverage caps based on your tier — you can trade at 5x if you're accredited, but nobody knows your underlying credit score. We've designed our contracts with FHE-native types in mind, and we're actively migrating to Zama's fhevm library to encrypt collateral, leverage, and position size on-chain. This gives us the best of both worlds: ZK for identity privacy, FHE for trade privacy."

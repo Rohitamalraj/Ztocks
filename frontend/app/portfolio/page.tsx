@@ -43,6 +43,7 @@ export default function PortfolioPage() {
   const { address, isConnected } = useAccount();
   const [activeTab, setActiveTab] = useState<"positions" | "history">("positions");
   const [verifyModalOpen, setVerifyModalOpen] = useState(false);
+  const [unwrapAmt, setUnwrapAmt] = useState("");
 
   const vault    = useVault();
   const prices   = useAssetQuotes();
@@ -96,6 +97,11 @@ export default function PortfolioPage() {
   const openEquity = enrichedPositions.reduce((s, p) => s + p.collateralUSDC + p.pnl, 0);
   const totalValue = vault.usdcBalance + openEquity;
   const openCount      = enrichedPositions.length;
+
+  const unwrapBusy =
+    vault.txStatus === "unwrap-requesting" ||
+    vault.txStatus === "unwrap-wait-relayer" ||
+    vault.txStatus === "unwrap-finalizing";
 
   if (!isConnected) {
     return (
@@ -171,6 +177,43 @@ export default function PortfolioPage() {
           <div className="border border-foreground/10 p-4">
             <div className="text-xs font-mono text-muted-foreground mb-1">USDC Balance</div>
             <div className="text-2xl font-mono">${vault.usdcBalance.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div className="border border-foreground/10 p-4 mb-8 bg-foreground/[0.02]">
+          <h2 className="text-sm font-mono mb-2">Withdraw USDC from cUSDC</h2>
+          <p className="text-xs font-mono text-muted-foreground mb-3">
+            After closing positions, collateral returns as confidential cUSDC. Unwrap burns cUSDC and credits plain USDC
+            via Zama’s two-step unwrap (relayer public decryption).
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-end max-w-xl">
+            <div className="flex-1">
+              <label className="block text-[10px] font-mono text-muted-foreground mb-1">Amount (USDC)</label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={unwrapAmt}
+                onChange={(e) => setUnwrapAmt(e.target.value)}
+                placeholder="e.g. 50"
+                className="w-full border border-foreground/15 bg-background px-3 py-2 font-mono text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={unwrapBusy || !unwrapAmt || Number(unwrapAmt) <= 0}
+              onClick={() => {
+                const n = Number(unwrapAmt);
+                if (!Number.isFinite(n) || n <= 0) return;
+                void vault.unwrapCUSDC(n).then((ok) => {
+                  if (ok) setUnwrapAmt("");
+                });
+              }}
+              className="px-4 py-2 bg-foreground text-background font-mono text-xs border border-foreground hover:bg-foreground/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+            >
+              {unwrapBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              {unwrapBusy ? vault.txStatus.replace(/-/g, " ") : "Withdraw USDC"}
+            </button>
           </div>
         </div>
 

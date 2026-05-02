@@ -1,4 +1,4 @@
-# zkSynth × Zama — Corrected Hackathon Brief
+# Ztocks × Zama — Corrected Hackathon Brief
 
 ## 🎯 Project in One Line
 A confidential synthetic stock trading protocol where your KYC tier is verified via zero-knowledge proofs and your leverage is enforced without revealing personal data — with an FHE-ready architecture for encrypted position management.
@@ -70,16 +70,16 @@ A hedge fund cannot move $50M into a DeFi protocol if every competitor can see t
 
 ---
 
-## ✅ The Solution — zkSynth's Dual Privacy Stack
+## ✅ The Solution — Ztocks's Dual Privacy Stack
 
 ### Core Innovation
-zkSynth combines **two privacy layers** to solve both identity privacy and trade privacy:
+Ztocks combines **two privacy layers** to solve both identity privacy and trade privacy:
 
 1. **ZK Identity Layer (LIVE):** Your KYC tier is verified via Groth16 zero-knowledge proofs. The contract knows you're eligible for 5x leverage without knowing your name, nationality, or credit score.
 
 2. **FHE-Ready Position Layer (IN PROGRESS):** Position data (collateral, leverage, direction) is designed to be encrypted using Zama's FHE, with enforcement logic that works on ciphertext.
 
-### Without zkSynth (today):
+### Without Ztocks (today):
 ```
 collateral = 10,000 USDC   ← visible to everyone
 leverage   = 8x            ← visible to everyone
@@ -87,7 +87,7 @@ direction  = LONG sAAPL    ← visible to everyone
 → MEV bots can target you
 ```
 
-### With zkSynth (current + roadmap):
+### With Ztocks (current + roadmap):
 ```
 ✅ LIVE: ZK-verified tier → leverage cap enforced without revealing identity
 🚧 ROADMAP: FHE-encrypted positions → collateral/leverage hidden from validators
@@ -206,13 +206,13 @@ When we complete Zama FHE integration:
 | Railgun | ✅ ZK shielded | ✅ ZK shielded | ❌ No tiers | ✅ | ❌ | ❌ |
 | Secret Network | ✅ TEE-based | ✅ TEE-based | ❌ No tiers | ❌ | ❌ | ❌ |
 | ZamaSwap (ref) | ❌ No identity | ✅ FHE | ❌ No tiers | ❌ | ✅ | ❌ |
-| **zkSynth** | **✅ ZK proofs** | **🚧 FHE-ready** | **✅ Tier-gated** | **✅** | **🚧** | **✅** |
+| **Ztocks** | **✅ ZK proofs** | **🚧 FHE-ready** | **✅ Tier-gated** | **✅** | **🚧** | **✅** |
 
 ### What Nobody Has That We Do
 
 1. **ZK-verified tier enforcement** — No protocol enforces leverage caps based on ZK-proven identity tiers. We verify your accreditation level without revealing your credit score or personal data.
 
-2. **Dual privacy stack** — Existing FHE demos (ZamaSwap) have no identity/compliance layer. Existing compliant DeFi (Aave Arc) has no privacy. zkSynth combines both.
+2. **Dual privacy stack** — Existing FHE demos (ZamaSwap) have no identity/compliance layer. Existing compliant DeFi (Aave Arc) has no privacy. Ztocks combines both.
 
 3. **MEV-resistant tier gating** — Your tier is verified via ZK proof, so bots can't see your accreditation level or predict your max leverage.
 
@@ -222,7 +222,7 @@ When we complete Zama FHE integration:
 
 ## 🏆 Judging Criteria Mapping
 
-| Zama Criterion | How zkSynth Scores |
+| Zama Criterion | How Ztocks Scores |
 |----------------|-------------------|
 | **Innovation** | ✅✅ First protocol to combine ZK identity verification with tier-based leverage enforcement. Novel dual-privacy stack: ZK for identity, FHE-ready for positions. |
 | **Compliance awareness** | ✅✅✅ Tier-based leverage caps enforced on-chain. KYC oracle with credit scoring. Accreditation gating without revealing personal data. |
@@ -237,7 +237,7 @@ When we complete Zama FHE integration:
 
 "On any public blockchain today, your entire trading strategy is visible to anyone watching. Your collateral, your leverage, your direction — all public. That's how one trader lost $17 million when adversaries read his 40x BTC position on Hyperliquid and systematically triggered his liquidation.
 
-zkSynth fixes this with a dual privacy stack. First, we use zero-knowledge proofs to verify your KYC tier without revealing your credit score or personal data. The contract knows you're eligible for 5x leverage, but nobody knows your underlying accreditation level.
+Ztocks fixes this with a dual privacy stack. First, we use zero-knowledge proofs to verify your KYC tier without revealing your credit score or personal data. The contract knows you're eligible for 5x leverage, but nobody knows your underlying accreditation level.
 
 Second, we're building on Zama's FHE to encrypt your position data. Your collateral, leverage, and direction will be encrypted the moment you submit a transaction — and stay encrypted forever. The smart contract will enforce your leverage cap, calculate your P&L, and check your liquidation threshold directly on encrypted data.
 
@@ -297,7 +297,7 @@ This is what DeFi needs to go from $185 billion to trillions: privacy for users,
 "Institutions won't join DeFi if every move is public. That's why adoption is stuck at 40% despite regulatory progress."
 
 **[0:30-0:50] Solution**
-"zkSynth solves this with a dual privacy stack. Zero-knowledge proofs verify your KYC tier without revealing your credit score. And we're building on Zama's FHE to encrypt your position data end-to-end."
+"Ztocks solves this with a dual privacy stack. Zero-knowledge proofs verify your KYC tier without revealing your credit score. And we're building on Zama's FHE to encrypt your position data end-to-end."
 
 **[0:50-1:10] Demo**
 [Screen recording: Connect wallet → Verify identity (ZK proof) → Open leveraged position → Show tier-based leverage cap]
@@ -309,7 +309,7 @@ This is what DeFi needs to go from $185 billion to trillions: privacy for users,
 "This is what DeFi needs to scale from $185 billion to trillions: privacy for users, compliance for institutions, and zero knowledge for everyone else."
 
 **[1:50-2:00] CTA**
-"zkSynth — confidential synthetic trading on Zama. Live demo at [URL]."
+"Ztocks — confidential synthetic trading on Zama. Live demo at [URL]."
 
 ---
 

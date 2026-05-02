@@ -7,12 +7,22 @@ import {
   useReadContract,
   useWriteContract,
 } from "wagmi";
-import { maxUint256, parseUnits } from "viem";
+import { useQueryClient } from "@tanstack/react-query";
+import { maxUint256, parseEventLogs, parseUnits } from "viem";
+import { sepolia } from "wagmi/chains";
 import { toast } from "sonner";
 import { waitForHash } from "@/lib/tx-utils";
+import { wagmiConfig } from "@/lib/wagmi";
 import { CONTRACTS, ASSET_TOKENS, TOKEN_SYMBOL } from "@/lib/contracts";
 import { SYNTH_VAULT_ABI, ERC20_ABI, CUSDC_ABI } from "@/lib/abis";
-import { buildEncryptedVaultInputs, decryptEbool, decryptEuint64, decryptEuint8 } from "@/lib/fhe";
+import {
+  buildEncryptedVaultInputs,
+  buildEncryptedEuint64,
+  decryptEbool,
+  decryptEuint64,
+  decryptEuint8,
+} from "@/lib/fhe";
+import type { Hex } from "viem";
 import type { AssetSymbol } from "@/hooks/use-asset-quotes";
 import type { Direction } from "@/hooks/use-positions";
 
@@ -23,6 +33,9 @@ export type TxStatus =
   | "setting-operator"
   | "opening"
   | "closing"
+  | "unwrap-requesting"
+  | "unwrap-wait-relayer"
+  | "unwrap-finalizing"
   | "success"
   | "error";
 
@@ -100,13 +113,36 @@ function toFriendlyTxMessage(err: unknown): string {
   if (msg.includes("allowance") || msg.includes("insufficient allowance")) {
     return "Token approval failed. Please try again."
   }
+  if (msg.includes("not_ready") || msg.includes("not ready for decryption")) {
+    return "Relayer is preparing public decryption. Wait a few seconds and retry finalize."
+  }
 
   return raw.slice(0, 180)
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
+}
+
+function readClearU64FromDecrypt(
+  clearValues: Readonly<Record<Hex, bigint | boolean | Hex>>,
+  handle: Hex,
+): bigint {
+  const lower = handle.toLowerCase() as Hex
+  for (const key of [handle, lower]) {
+    const v = clearValues[key]
+    if (typeof v === "bigint") return v
+  }
+  for (const v of Object.values(clearValues)) {
+    if (typeof v === "bigint") return v
+  }
+  throw new Error("Relayer did not return a cleartext unwrap amount.")
 }
 
 export function useVault() {
   const { address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const queryClient = useQueryClient();
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txError, setTxError]   = useState<string | null>(null);
   const [allPositions, setAllPositions] = useState<OnChainPosition[]>([]);
@@ -196,6 +232,7 @@ export function useVault() {
           abi: ERC20_ABI,
           functionName: "approve",
           args: [CONTRACTS.CUSDC as `0x${string}`, maxUint256],
+          chainId: sepolia.id,
         });
         await waitForHash(hash);
         console.log("[1/4] ✓ USDC approved", hash);
@@ -213,6 +250,7 @@ export function useVault() {
         abi: CUSDC_ABI,
         functionName: "wrap",
         args: [address, collateralBn],
+        chainId: sepolia.id,
       });
       await waitForHash(wrapHash);
       console.log("[2/4] ✓ cUSDC wrapped", wrapHash);
@@ -228,6 +266,7 @@ export function useVault() {
           abi: CUSDC_ABI,
           functionName: "setOperator",
           args: [CONTRACTS.SynthVault as `0x${string}`, until],
+          chainId: sepolia.id,
         });
         await waitForHash(operatorHash);
         console.log("[3/4] ✓ Operator approved", operatorHash);
@@ -258,6 +297,7 @@ export function useVault() {
           encrypted.handles[3],
           encrypted.inputProof,
         ],
+        chainId: sepolia.id,
       });
       console.log("[3/3] Tx submitted:", hash);
       await waitForHash(hash);
@@ -295,6 +335,7 @@ export function useVault() {
         abi: SYNTH_VAULT_ABI,
         functionName: "closePosition",
         args: [BigInt(index), executionPrice],
+        chainId: sepolia.id,
       });
       console.log("[Ztocks:vault] closePosition tx:", hash);
       await waitForHash(hash);
@@ -313,12 +354,147 @@ export function useVault() {
     }
   }, [address, writeContractAsync, refetchPositions]);
 
+  /**
+   * Two-step ERC-7984 unwrap (Zama): encrypted burn + relayer public decrypt + finalize.
+   * @see https://docs.zama.org/protocol/protocol-apps/confidential-tokens/confidential-wrapper
+   */
+  const unwrapCUSDC = useCallback(async (amountNum: number) => {
+    if (!address) return false;
+    setTxError(null);
+
+    if (!CONTRACTS.CUSDC) {
+      toast.error("cUSDC address not configured.");
+      return false;
+    }
+
+    const collateralBn = parseUnits(String(amountNum), 6);
+    try {
+      setTxStatus("unwrap-requesting");
+      toast.loading("Requesting cUSDC unwrap (step 1/2)…", { id: "tx-unwrap" });
+
+      const encrypted = await buildEncryptedEuint64({
+        contractAddress: CONTRACTS.CUSDC,
+        userAddress:     address,
+        amount:           collateralBn,
+      });
+
+      const hash = await writeContractAsync({
+        address: CONTRACTS.CUSDC as `0x${string}`,
+        abi: CUSDC_ABI,
+        functionName: "unwrap",
+        args: [address, address, encrypted.handles[0], encrypted.inputProof],
+        chainId: sepolia.id,
+      });
+
+      const { waitForTransactionReceipt } = await import("@wagmi/core");
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash });
+
+      const cusdcLc = (CONTRACTS.CUSDC as string).toLowerCase();
+      const logs = parseEventLogs({
+        abi: CUSDC_ABI,
+        logs: receipt.logs.filter((l) => l.address.toLowerCase() === cusdcLc),
+        eventName: "UnwrapRequested",
+      });
+
+      const unwrapRequestId = logs[0]?.args.unwrapRequestId as Hex | undefined;
+      if (!unwrapRequestId) {
+        throw new Error("UnwrapRequested event not found — check explorer for this tx.");
+      }
+
+      setTxStatus("unwrap-wait-relayer");
+      toast.loading("Waiting on Zama relayer for public decryption…", { id: "tx-unwrap" });
+
+      const handle = unwrapRequestId.toLowerCase() as Hex;
+      let clearAmount: bigint | undefined;
+      let decryptionProof: Hex | undefined;
+
+      for (let attempt = 0; attempt < 24; attempt++) {
+        try {
+          const res = await fetch("/api/fhe/public-decrypt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ handles: [handle] }),
+          });
+          const data = (await res.json()) as {
+            error?: string;
+            decryptionProof?: Hex;
+            clearValues?: Record<string, string>;
+          };
+          if (!res.ok || data.error) {
+            throw new Error(data.error ?? res.statusText);
+          }
+
+          const asMap = {} as Record<Hex, bigint | boolean | Hex>;
+          if (data.clearValues) {
+            for (const [k, v] of Object.entries(data.clearValues)) {
+              const key = k.toLowerCase() as Hex;
+              try {
+                asMap[key] = BigInt(v);
+              } catch {
+                asMap[key] = v as Hex;
+              }
+            }
+          }
+          decryptionProof = data.decryptionProof as Hex;
+          clearAmount = readClearU64FromDecrypt(asMap, handle);
+          break;
+        } catch (e) {
+          const m = extractTxMessage(e).toLowerCase();
+          if (attempt === 23) throw e;
+          if (
+            m.includes("not_ready") ||
+            m.includes("not allowed") ||
+            m.includes("acl") ||
+            m.includes("502") ||
+            m.includes("bad gateway")
+          ) {
+            await sleep(2000);
+            continue;
+          }
+          throw e;
+        }
+      }
+
+      if (clearAmount === undefined || !decryptionProof) {
+        throw new Error("Public decryption did not complete. Retry in a few seconds.");
+      }
+
+      setTxStatus("unwrap-finalizing");
+      toast.loading("Finalizing unwrap to USDC (step 2/2)…", { id: "tx-unwrap" });
+
+      const finHash = await writeContractAsync({
+        address: CONTRACTS.CUSDC as `0x${string}`,
+        abi: CUSDC_ABI,
+        functionName: "finalizeUnwrap",
+        args: [unwrapRequestId, clearAmount, decryptionProof],
+        chainId: sepolia.id,
+      });
+      await waitForHash(finHash);
+
+      void queryClient.invalidateQueries();
+
+      setTxStatus("success");
+      toast.success("USDC received in your wallet", { id: "tx-unwrap" });
+      setTimeout(() => setTxStatus("idle"), 2500);
+      return true;
+    } catch (err: unknown) {
+      const msg = toFriendlyTxMessage(err);
+      console.error("[Ztocks:vault] unwrapCUSDC:", err);
+      setTxError(msg);
+      setTxStatus("error");
+      toast.error("Unwrap failed", { id: "tx-unwrap", description: msg });
+      setTimeout(() => setTxStatus("idle"), 5000);
+      return false;
+    }
+  }, [address, writeContractAsync, queryClient]);
+
   const resetTxState = useCallback(() => {
     console.log("[Ztocks:vault] Manually resetting transaction state");
     setTxStatus("idle");
     setTxError(null);
     toast.dismiss("tx");
     toast.dismiss("tx-close");
+    toast.dismiss("tx-unwrap");
   }, []);
 
   useEffect(() => {
@@ -374,6 +550,7 @@ export function useVault() {
     positions,
     openPosition,
     closePosition,
+    unwrapCUSDC,
     resetTxState,
     txStatus,
     txError,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract, useSwitchChain } from "wagmi";
+import { sepolia } from "wagmi/chains";
 import { toast } from "sonner";
 import { CONTRACTS } from "@/lib/contracts";
 import { ZK_VERIFIER_ABI } from "@/lib/abis";
@@ -75,8 +76,9 @@ interface ProofServerLogOptions {
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
 export function useZkIdentity() {
-  const { address } = useAccount();
+  const { address, chainId: walletChainId } = useAccount();
   const { writeContractAsync } = useWriteContract();
+  const { switchChainAsync } = useSwitchChain();
 
   const [status, setStatus] = useState<ZkStatus>("idle");
   const [tier, setTier]     = useState(0);
@@ -134,9 +136,24 @@ export function useZkIdentity() {
         },
       });
 
-      // Step 3: submit proof on-chain
+      // Step 3: ensure wallet is on Sepolia before submitting
+      if (walletChainId !== sepolia.id) {
+        console.log("[3/4] Wallet on chain", walletChainId, "— switching to Sepolia...");
+        toast.loading("Switching to Sepolia network…", { id: "zk" });
+        try {
+          await switchChainAsync({ chainId: sepolia.id });
+          console.log("[3/4] ✓ Switched to Sepolia");
+        } catch (switchErr) {
+          throw new Error(
+            "Please switch your wallet to Sepolia network (chain 11155111) to submit the proof. " +
+            "You can do this manually in MetaMask: Settings → Networks → Sepolia."
+          );
+        }
+      }
+
+      // Step 4: submit proof on-chain (force chainId: sepolia.id)
       setStatus("submitting");
-      console.log("[3/3] Submitting proof to ZKVerifier:", CONTRACTS.ZKVerifier);
+      console.log("[4/4] Submitting proof to ZKVerifier:", CONTRACTS.ZKVerifier);
       void logProofStageToServer("proof-submit-start", {
         wallet: address,
         details: {
@@ -150,6 +167,7 @@ export function useZkIdentity() {
         abi: ZK_VERIFIER_ABI,
         functionName: "submitProof",
         args: [a, b, c, pubSignals],
+        chainId: sepolia.id,
       });
 
       console.log("[3/3] Tx submitted:", hash);
@@ -199,7 +217,7 @@ export function useZkIdentity() {
       setStatus("error");
       toast.error("Verification failed", { id: "zk", description: msg });
     }
-  }, [address, writeContractAsync]);
+  }, [address, walletChainId, writeContractAsync, switchChainAsync]);
 
   // ── Read tier from ZKVerifier ────────────────────────────────────────────
   const refreshTier = useCallback(async () => {

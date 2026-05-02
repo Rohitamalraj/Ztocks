@@ -7,7 +7,7 @@ Date: 2026-05-01
 - **Market data in the UI is live (Finnhub)**: The frontend polls a Next.js API route that fetches quotes from Finnhub. No random/mock price generator is present in the runtime path.
 - **Trade execution price is not oracle-enforced on-chain (hackathon simplification)**: The Sepolia vault contract accepts an `executionPrice` argument from the caller and only checks it is non-zero; it does not verify the price against an on-chain oracle.
 - **Sepolia deployments are recorded and are wired via frontend env**: Deployed addresses are in `contracts/deployments/sepolia.json`; the frontend reads addresses from `NEXT_PUBLIC_*` env vars in `frontend/lib/contracts.ts`.
-- **Branding cleanup (runtime)**: The misleading `useMockPrices` hook was replaced with `useAssetQuotes`, and remaining runtime/UI `zkSynth` strings were removed or renamed to `Ztocks`.
+- **Branding cleanup (runtime)**: The misleading `useMockPrices` hook was replaced with `useAssetQuotes`, and remaining runtime/UI naming was standardized to `Ztocks`.
 
 ## 2) “Real vs Mock” Data — What’s Actually Used
 
@@ -79,11 +79,11 @@ Recorded addresses include:
 Frontend wiring:
 - `frontend/lib/contracts.ts` reads addresses from `NEXT_PUBLIC_*` environment variables and maps symbols (e.g. `sAAPL`) to synth token addresses (e.g. `csAAPL`).
 
-## 6) “zkSynth” Dependency / Coupling Assessment
+## 6) Legacy Dependency / Coupling Assessment
 
 ### 6.1 Runtime code
 
-- No runtime code path requires a zkSynth package/repo.
+- No runtime code path requires an external legacy package/repo.
 - Remaining runtime/UI references were renamed to `Ztocks`:
   - Navigation branding
   - Console log tags
@@ -92,7 +92,7 @@ Frontend wiring:
 
 ### 6.2 Repository docs & artifacts
 
-Some **historical/working documents** still reference “zkSynth” as a source/baseline concept and may be kept as reference material:
+Some **historical/working documents** still reference prior naming as a source/baseline concept and may be kept as reference material:
 - `CORRECTED_HACKATHON_BRIEF.md`
 - `ZAMA_IMPLEMENTATION_ROADMAP.md`
 - `WORDING_FIXES.md`
@@ -107,4 +107,4 @@ If you want a “zero matches” repository grep (strict rebrand), these files s
 
 1. **If execution correctness matters**, add an oracle-verified execution price path (on-chain oracle, signed off-chain price attestations, or a trusted relayer) and validate inside the vault.
 2. Decide whether the **backend price oracle** is a requirement. If not, remove it (or clearly mark it unused).
-3. If you need a strict “no zkSynth strings anywhere” standard, do a controlled rename pass on the remaining docs and regenerate/remove stale build artifacts.
+3. If you need a strict “single brand naming everywhere” standard, do a controlled rename pass on the remaining docs and regenerate/remove stale build artifacts.

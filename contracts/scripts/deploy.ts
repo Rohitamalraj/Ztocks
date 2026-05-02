@@ -6,7 +6,6 @@ import * as path from "path";
 const ORACLE_PUBKEY_AX = process.env.ORACLE_PUBKEY_AX || "0";
 const ORACLE_PUBKEY_AY = process.env.ORACLE_PUBKEY_AY || "0";
 const USDC_ADDRESS = process.env.USDC_ADDRESS;
-const FEE_TOKEN_ADDRESS = process.env.FEE_TOKEN_ADDRESS;
 
 const SYNTH_ASSETS = [
   { name: "Confidential Synthetic Apple", symbol: "csAAPL", underlying: "AAPL" },
@@ -45,34 +44,18 @@ async function main() {
     console.log("1. Using USDC:", underlyingUsdcAddress);
   }
 
-  // ── 2. Fee token (optional) ────────────────────────────────────────────
-  let feeTokenAddress: string | undefined;
-  if (isLocal) {
-    console.log("2. Deploying MockFeeToken (MockHSP)...");
-    const MockHSP = await ethers.getContractFactory("MockHSP");
-    const feeToken = await MockHSP.deploy();
-    await feeToken.waitForDeployment();
-    feeTokenAddress = await feeToken.getAddress();
-    console.log("   MockFeeToken:", feeTokenAddress);
-  } else if (FEE_TOKEN_ADDRESS) {
-    feeTokenAddress = FEE_TOKEN_ADDRESS;
-    console.log("2. Using fee token:", feeTokenAddress);
-  } else {
-    console.log("2. Fee token not set; fee module will be disabled.");
-  }
-
-  // ── 3. ConfidentialTierManager (deploy FIRST, needed by ZKVerifier) ────
-  console.log("3. Deploying ConfidentialTierManager...");
+  // ── 2. ConfidentialTierManager (deploy FIRST, needed by ZKVerifier) ────
+  console.log("2. Deploying ConfidentialTierManager...");
   const TierManager = await ethers.getContractFactory("ConfidentialTierManager");
   const tierManager = await TierManager.deploy();
   await tierManager.waitForDeployment();
   const tierManagerAddress = await tierManager.getAddress();
   console.log("   ConfidentialTierManager:", tierManagerAddress);
 
-  // ── 4. Groth16Verifier + ZKVerifier ─────────────────────────────────────
+  // ── 3. Groth16Verifier + ZKVerifier ─────────────────────────────────────
   let zkVerifierAddress: string;
   if (isLocal) {
-    console.log("4. Deploying MockZKVerifier (local)...");
+    console.log("3. Deploying MockZKVerifier (local)...");
     const MockZKVerifier = await ethers.getContractFactory("MockZKVerifier");
     const mockZKVerifier = await MockZKVerifier.deploy();
     await mockZKVerifier.waitForDeployment();
@@ -85,14 +68,14 @@ async function main() {
         "Run: npx ts-node scripts/gen-oracle-key.ts to generate a keypair"
       );
     }
-    console.log("4. Deploying Groth16Verifier...");
+    console.log("3. Deploying Groth16Verifier...");
     const Groth16Verifier = await ethers.getContractFactory("Groth16Verifier");
     const groth16Verifier = await Groth16Verifier.deploy();
     await groth16Verifier.waitForDeployment();
     const groth16VerifierAddress = await groth16Verifier.getAddress();
     console.log("   Groth16Verifier:", groth16VerifierAddress);
 
-    console.log("4b. Deploying ZKVerifier with oracle public key...");
+    console.log("3b. Deploying ZKVerifier with oracle public key...");
     console.log("    Oracle Ax:", ORACLE_PUBKEY_AX.slice(0, 20) + "...");
     const ZKVerifier = await ethers.getContractFactory("ZKVerifier");
     const zkVerifier = await ZKVerifier.deploy(
@@ -106,16 +89,16 @@ async function main() {
     console.log("   ZKVerifier:", zkVerifierAddress);
   }
 
-  // ── 5. ConfidentialUSDC (cUSDC) ─────────────────────────────────────────
-  console.log("5. Deploying ConfidentialUSDC...");
+  // ── 4. ConfidentialUSDC (cUSDC) ─────────────────────────────────────────
+  console.log("4. Deploying ConfidentialUSDC...");
   const ConfidentialUSDC = await ethers.getContractFactory("ConfidentialUSDC");
   const cUSDC = await ConfidentialUSDC.deploy(underlyingUsdcAddress);
   await cUSDC.waitForDeployment();
   const cUSDCAddress = await cUSDC.getAddress();
   console.log("   ConfidentialUSDC:", cUSDCAddress);
 
-  // ── 6. Confidential SynthTokens ─────────────────────────────────────────
-  console.log("6. Deploying ConfidentialSynthTokens...");
+  // ── 5. Confidential SynthTokens ─────────────────────────────────────────
+  console.log("5. Deploying ConfidentialSynthTokens...");
   const ConfidentialSynthToken = await ethers.getContractFactory("ConfidentialSynthToken");
   const synthTokens: { symbol: string; address: string; contract: any }[] = [];
   for (const asset of SYNTH_ASSETS) {
@@ -132,55 +115,41 @@ async function main() {
     console.log(`   ${asset.symbol}:`, tokenAddress);
   }
 
-  // ── 7. FeeModule (optional) ─────────────────────────────────────────────
-  let feeModuleAddress = ethers.ZeroAddress;
-  let feeModule: any = undefined;
-  if (feeTokenAddress) {
-    console.log("7. Deploying FeeModule...");
-    const FeeModule = await ethers.getContractFactory("FeeModule");
-    feeModule = await FeeModule.deploy(feeTokenAddress, deployer.address);
-    await feeModule.waitForDeployment();
-    feeModuleAddress = await feeModule.getAddress();
-    console.log("   FeeModule:", feeModuleAddress);
-  } else {
-    console.log("7. FeeModule skipped.");
-  }
-
-  // ── 8. ConfidentialSynthVaultFHE ────────────────────────────────────────
-  console.log("8. Deploying ConfidentialSynthVaultFHE...");
+  // ── 6. ConfidentialSynthVaultFHE ────────────────────────────────────────
+  console.log("6. Deploying ConfidentialSynthVaultFHE...");
   const SynthVault = await ethers.getContractFactory("ConfidentialSynthVaultFHE");
   const vault = await SynthVault.deploy(
     zkVerifierAddress,
     tierManagerAddress,
-    cUSDCAddress,
-    feeModuleAddress
+    cUSDCAddress
   );
   await vault.waitForDeployment();
   console.log("   ConfidentialSynthVaultFHE:", await vault.getAddress());
 
-  // ── 9. Wire up permissions ──────────────────────────────────────────────
-  console.log("\n9. Wiring up permissions...");
+  // ── 7. Wire up permissions ──────────────────────────────────────────────
+  console.log("\n7. Wiring up permissions...");
   const vaultAddr = await vault.getAddress();
 
-  // Set vault on each SynthToken
+  // 7a. Grant ZKVerifier permission to call TierManager.setTier()
+  if (!isLocal) {
+    const tierManagerContract = await ethers.getContractAt("ConfidentialTierManager", tierManagerAddress);
+    await (await tierManagerContract.setZKVerifier(zkVerifierAddress)).wait();
+    console.log("    TierManager.setZKVerifier ✓");
+  }
+
+  // 7b. Set vault on each SynthToken
   for (const token of synthTokens) {
     await (await token.contract.setVault(vaultAddr)).wait();
   }
   console.log("    ConfidentialSynthToken.setVault ✓");
 
-  // Set vault on fee module (if deployed)
-  if (feeModule && feeModuleAddress !== ethers.ZeroAddress) {
-    await (await feeModule.setVault(vaultAddr)).wait();
-    console.log("    FeeModule.setVault ✓");
-  }
-
-  // Register synth assets on vault
+  // 7c. Register synth assets on vault
   for (const token of synthTokens) {
     await (await vault.registerSynthAsset(token.address)).wait();
   }
   console.log("    vault.registerSynthAsset ✓");
 
-  // ── 10. Save deployment addresses ───────────────────────────────────────
+  // ── 8. Save deployment addresses ───────────────────────────────────────
   const deployments = {
     network:               network.name,
     deployedAt:            new Date().toISOString(),
@@ -190,8 +159,6 @@ async function main() {
     ZKVerifier:            zkVerifierAddress,
     ConfidentialTierManager: tierManagerAddress,
     ConfidentialSynthVaultFHE: await vault.getAddress(),
-    FeeModule:             feeModuleAddress === ethers.ZeroAddress ? undefined : feeModuleAddress,
-    FeeToken:              feeTokenAddress,
     tokens: Object.fromEntries(synthTokens.map((token) => [token.symbol, token.address])),
   };
 
@@ -201,19 +168,13 @@ async function main() {
   fs.writeFileSync(outFile, JSON.stringify(deployments, null, 2));
   console.log(`\n✓ Deployment saved to ${outFile}`);
 
-  // ── 11. Print .env values ──────────────────────────────────────────────
+  // ── 9. Print .env values ──────────────────────────────────────────────
   console.log("\n─── Copy these to your .env / Vercel env vars ─────────────────");
   console.log(`NEXT_PUBLIC_USDC_ADDRESS=${underlyingUsdcAddress}`);
   console.log(`NEXT_PUBLIC_CUSDC_ADDRESS=${cUSDCAddress}`);
-  if (feeTokenAddress) {
-    console.log(`NEXT_PUBLIC_FEE_TOKEN_ADDRESS=${feeTokenAddress}`);
-  }
   console.log(`NEXT_PUBLIC_ZK_VERIFIER_ADDRESS=${zkVerifierAddress}`);
   console.log(`NEXT_PUBLIC_TIER_MANAGER_ADDRESS=${tierManagerAddress}`);
   console.log(`NEXT_PUBLIC_SYNTH_VAULT_ADDRESS=${await vault.getAddress()}`);
-  if (feeModuleAddress !== ethers.ZeroAddress) {
-    console.log(`NEXT_PUBLIC_FEE_MODULE_ADDRESS=${feeModuleAddress}`);
-  }
   for (const token of synthTokens) {
     const envKey = `NEXT_PUBLIC_${token.symbol.toUpperCase()}_ADDRESS`;
     console.log(`${envKey}=${token.address}`);

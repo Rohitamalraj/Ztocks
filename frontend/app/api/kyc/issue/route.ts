@@ -14,9 +14,9 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, isAddress, formatEther, formatUnits } from "viem";
-import { derivePublicKey, signMessage } from "@zk-kit/eddsa-poseidon";
-import { buildPoseidon } from "circomlibjs";
 import { sepolia } from "viem/chains";
+
+export const runtime = "nodejs";
 
 // ─── Chain config ──────────────────────────────────────────────────────────
 const SEPOLIA_RPC =
@@ -186,6 +186,11 @@ export async function POST(req: NextRequest) {
 
     // walletAddr as field element (Ethereum address is 160 bits, fits in BN128)
     const walletAddrBI = BigInt(address);
+
+    const [{ derivePublicKey, signMessage }, { buildPoseidon }] = await Promise.all([
+      import("@zk-kit/eddsa-poseidon"),
+      import("circomlibjs"),
+    ]);
 
     // Compute message hash: Poseidon(walletAddr, tier, creditScore, expiry, nonce)
     // Must match the circuit's msgHash component exactly.

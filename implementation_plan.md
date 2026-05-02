@@ -5,7 +5,7 @@ Build a confidential synthetic stock trading dApp where collateral, leverage, an
 ## Architecture Overview
 
 ```
-zkSynth (source)                    →  Ztocks (target)
+Legacy app (source)                 →  Ztocks (target)
 ─────────────────                      ────────────────
 HashKey Chain Testnet (ID: 133)     →  Sepolia Testnet (ID: 11155111)
 ZK Proofs (Circom/Groth16)          →  ZK tier proof retained for leverage gating
@@ -25,14 +25,14 @@ Same frontend design/CSS/UX        →  Same frontend design/CSS/UX
 > **Hybrid ZK + FHE Stack**: Ztocks keeps the `circuits/` folder and `ZKVerifier` flow because zk identity decides leverage caps. FHE remains the confidentiality layer for position data as we migrate to full fhEVM encrypted types.
 
 > [!WARNING]
-> **Contract Differences from zkSynth**: Ztocks keeps zk-based identity verification for eligibility and leverage enforcement, while evolving vault logic toward fhEVM encrypted state. The current Sepolia contracts are FHE-ready and preserve the same leverage-by-tier invariant from zkSynth.
+> **Contract Differences from prior baseline**: Ztocks keeps zk-based identity verification for eligibility and leverage enforcement, while evolving vault logic toward fhEVM encrypted state. The current Sepolia contracts are FHE-ready and preserve the same leverage-by-tier invariant.
 
 ## Open Questions
 
 > [!IMPORTANT]
 > 1. **Deployer Wallet**: Do you have a wallet with Sepolia ETH loaded? We'll need it for deploying contracts. If not, we can set up a faucet flow.
-> 2. **WalletConnect Project ID**: Should I reuse the same WalletConnect project ID `9faa374ae697bf8830e16c49cd631805` from zkSynth, or do you have a new one for Ztocks?
-> 3. **Finnhub API Key**: Should I reuse the same Finnhub key from zkSynth for price feeds?
+> 2. **WalletConnect Project ID**: Should I reuse the same WalletConnect project ID `9faa374ae697bf8830e16c49cd631805`, or do you have a new one for Ztocks?
+> 3. **Finnhub API Key**: Should I reuse the same Finnhub key for price feeds?
 > 4. **Infura API Key**: For Sepolia RPC, do you have an Infura key, or should we use a public RPC like `https://rpc.sepolia.org`?
 
 ---
@@ -57,9 +57,9 @@ D:\Projects\Ztocks\
 │   ├── package.json
 │   └── .env
 │
-├── frontend/                      # Next.js 16 frontend (same design as zkSynth)
+├── frontend/                      # Next.js 16 frontend
 │   ├── app/
-│   │   ├── globals.css            # Exact same CSS from zkSynth
+│   │   ├── globals.css            # Project CSS
 │   │   ├── layout.tsx
 │   │   ├── page.tsx               # Landing page
 │   │   ├── providers.tsx
@@ -156,7 +156,7 @@ Liquidation logic that checks health factor on encrypted data.
 
 #### [REUSE] SynthToken.sol
 
-Same ERC-20 synth token from zkSynth — mint/burn restricted to vault.
+Same ERC-20 synth token design — mint/burn restricted to vault.
 
 #### [REUSE] MockUSDC.sol / MockFeeToken.sol
 
@@ -164,25 +164,25 @@ Same mock tokens for testnet, with faucet function.
 
 ---
 
-### Frontend (Next.js 16 — Same Design as zkSynth)
+### Frontend (Next.js 16)
 
 #### Design System — Exact Copy
 
-- **`globals.css`** — Copy verbatim from zkSynth (Tailwind v4 + tw-animate-css + all custom utilities)
+- **`globals.css`** — Copy verbatim from the prior build (Tailwind v4 + tw-animate-css + all custom utilities)
 - **`layout.tsx`** — Same Figtree + Geist Mono fonts, same structure
 - **UI Components** — All 13 UI primitives copied: button, input, label, badge, dialog, drawer, select, separator, slider, alert, bottom-sheet, leverage-slider, token-logo
 - **Landing Components** — All 13 landing sections adapted for Ztocks branding
 
-#### Key Differences from zkSynth Frontend
+#### Key Differences from prior frontend
 
-| Area | zkSynth | Ztocks |
+| Area | Prior build | Ztocks |
 |------|---------|--------|
 | Chain | HashKey Testnet (133) | Sepolia (11155111) |
 | Identity | ZK proof generation (snarkjs) | FHE tier encryption (Zama SDK) |
 | Verify modal | Circom proof flow | Oracle-set encrypted tier flow |
 | Hooks | `use-zk-identity.ts` | `use-fhe-identity.ts` |
 | Wagmi config | HashKey chain def | Sepolia chain def |
-| Branding | "zkSynth Access" | "Ztocks" |
+| Branding | prior naming | "Ztocks" |
 | Landing copy | ZK-focused messaging | FHE-focused messaging |
 
 #### [NEW] Frontend Files
@@ -194,7 +194,7 @@ Same mock tokens for testnet, with faucet function.
 - `hooks/use-vault.ts` — Adapted for FHE encrypted inputs
 - `components/dashboard/verify-identity-modal.tsx` — FHE flow instead of ZK
 
-#### [COPY] Frontend Files (from zkSynth, adapted)
+#### [COPY] Frontend Files (from prior build, adapted)
 
 All remaining components, hooks, and lib files — with branding and chain references updated.
 
@@ -202,9 +202,9 @@ All remaining components, hooks, and lib files — with branding and chain refer
 
 ### Backend (Express.js — Price Oracle + KYC)
 
-Nearly identical to zkSynth backend, with these changes:
+Nearly identical to the prior backend, with these changes:
 
-| Area | zkSynth | Ztocks |
+| Area | Prior build | Ztocks |
 |------|---------|--------|
 | Chain client | HashKey Testnet RPC | Sepolia RPC |
 | KYC route | Returns signed credential for ZK | Returns tier assessment (oracle sets on-chain) |
@@ -223,7 +223,7 @@ Nearly identical to zkSynth backend, with these changes:
 
 ### Phase 1: Project Scaffolding
 1. Initialize `contracts/` using Zama's fhevm-hardhat-template structure
-2. Initialize `frontend/` with Next.js 16 (same as zkSynth)
+2. Initialize `frontend/` with Next.js 16
 3. Initialize `backend/` with Express.js
 4. Copy design system (CSS, fonts, UI components)
 
@@ -235,14 +235,14 @@ Nearly identical to zkSynth backend, with these changes:
 5. Write deploy script for Sepolia
 
 ### Phase 3: Frontend
-1. Copy all UI primitives and landing components from zkSynth
+1. Copy all UI primitives and landing components from the prior build
 2. Adapt wagmi config for Sepolia
 3. Adapt hooks for FHE (replace ZK proof flow with FHE encryption)
 4. Adapt trading page, portfolio page
 5. Update all branding to "Ztocks"
 
 ### Phase 4: Backend
-1. Copy backend structure from zkSynth
+1. Copy backend structure from the prior build
 2. Adapt chain client for Sepolia
 3. Simplify KYC route (no signing, just tier assessment)
 

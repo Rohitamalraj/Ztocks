@@ -1,217 +1,199 @@
-# Ztocks - Confidential Synthetic Trading Protocol
+# Ztocks
 
-> A privacy-preserving synthetic stock trading protocol combining Zero-Knowledge proofs with Fully Homomorphic Encryption on Zama Protocol.
+Confidential synthetic stock trading built on Zama Protocol.
 
-## 🎯 Overview
+`Ztocks` is a full-stack dApp where collateral, leverage, and position data remain encrypted on-chain using FHE, while compliance rules (tier-gated leverage) are still enforced on encrypted state.
 
-Ztocks enables confidential trading of synthetic stocks (sAAPL, sTSLA, etc.) with:
-- **ZK Identity Layer**: Verify KYC tier without revealing personal data
-- **FHE Position Layer**: Encrypt collateral, leverage, and direction on-chain
-- **ERC7984 Token Layer**: Encrypted token balances using OpenZeppelin standard
-- **Tier-Based Leverage**: Enforce compliance rules on encrypted data
-- **MEV Protection**: Position parameters hidden from validators and bots
+## Problem
 
-## 🏗️ Architecture
+Public blockchains expose position metadata by default. In leveraged trading, this creates two major failures:
+
+- Execution alpha leaks: pending trades and sizes are visible to counterparties and bots.
+- MEV extraction: public parameters enable front-running, sandwiching, and liquidation targeting.
+- Institutional friction: compliance and confidentiality requirements are hard to satisfy simultaneously on transparent ledgers.
+
+This project targets that gap by combining:
+
+- ZK proofs for private identity/tier attestation.
+- FHE for encrypted on-chain trading state and logic.
+- ERC7984 confidential token flows for private balances.
+
+## Why Now (Market Context)
+
+- DeFi market size in 2026: **$238.54B**, projected **$770.56B by 2031** (26.43% CAGR).  
+  Source: [Mordor Intelligence](https://www.mordorintelligence.com/industry-reports/decentralized-finance-defi-market)
+- DeFi TVL in Q1 2026: **$185B**, users: **8.2M**, institutional share: **34%**.  
+  Source: [Resh Network](https://www.resh.network/blog/defi-state-of-market-2026)
+- Institutional operational crypto adoption remains around **40%**, with privacy/confidentiality repeatedly cited as a blocker.  
+  Source: [Retail Banker International](https://www.retailbankerinternational.com/news/institutional-crypto-adoption-flat-in-2025-globaldata/)
+- Ethereum users have lost **$1.3B+** to MEV-style extraction patterns.  
+  Source: [Digitap](https://digitap.app/news/guide/what-is-mev-how-it-impacts-traders-networks-in-2025)
+
+## Solution Overview
+
+`Ztocks` enforces leverage policy and position mechanics while core trading values stay encrypted:
+
+- Collateral: encrypted (`euint64` flow via confidential wrapper + vault logic)
+- Leverage: encrypted (`euint8`)
+- Direction: encrypted (`ebool`)
+- Tier checks: enforced in `ConfidentialTierManager` using FHE operations
+
+Compliance is preserved without exposing user financial intent in plaintext.
+
+## Architecture
 
 ```
-┌─────────────────── ZK Identity Layer ──────────────────┐
-│  Circom circuit verifies KYC tier via Groth16 proofs   │
-│  No personal data on-chain, only tier (1-4)            │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────── FHE Encryption Layer ───────────────┐
-│  Tier encrypted as euint8 in ConfidentialTierManager   │
-│  Positions encrypted as euint64/ebool in Vault         │
-│  Leverage enforcement on ciphertext using FHE ops      │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────── ERC7984 Token Layer ────────────────┐
-│  ConfidentialSynthToken: Encrypted synth balances      │
-│  ConfidentialUSDC: Encrypted collateral wrapper        │
-│  OpenZeppelin standard for confidential tokens         │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────── Smart Contracts ────────────────────┐
-│  ConfidentialSynthVaultFHE: FHE-encrypted trading      │
-│  ConfidentialTierManager: Encrypted tier storage       │
-│  ZKVerifier: Groth16 proof verification                │
-└─────────────────────────────────────────────────────────┘
+┌────────────────────────── User / Frontend ──────────────────────────┐
+│ Next.js app encrypts trade inputs client-side (fhevmjs)             │
+│ Generates Groth16 proof for KYC tier attestation (snarkjs + circom) │
+└──────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────── On-chain Layer ──────────────────────────┐
+│ ZKVerifier.sol                                                       │
+│   - verifies Groth16 proof                                           │
+│   - writes verified tier + expiry                                    │
+│                                                                      │
+│ ConfidentialTierManager.sol                                          │
+│   - stores encrypted tier state                                      │
+│   - checks leverage cap against encrypted leverage                   │
+│                                                                      │
+│ ConfidentialSynthVaultFHE.sol                                        │
+│   - opens/closes encrypted positions                                 │
+│   - pulls confidential collateral                                    │
+│   - mints/burns confidential synths                                  │
+│                                                                      │
+│ ConfidentialUSDC.sol + ConfidentialSynthToken.sol (ERC7984)          │
+│   - confidential wrapper + confidential synth balances               │
+└──────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌──────────────────────────── Zama Relayer ────────────────────────────┐
+│ Handles public decryption flow for wrapper unwrap finalization       │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-## 📦 Project Structure
+## Core Features
 
-```
-Ztocks/
-├── contracts/          # Solidity smart contracts (Hardhat)
-│   ├── contracts/      # Contract source files
-│   ├── scripts/        # Deployment scripts
-│   └── test/           # Contract tests
-├── circuits/           # Circom ZK circuits
-│   ├── tier_proof.circom
-│   └── scripts/        # Circuit compilation
-├── frontend/           # Next.js 16 trading interface
-│   ├── app/            # Next.js app directory
-│   ├── components/     # React components
-│   └── hooks/          # Custom React hooks
-└── backend/            # Express.js backend services
-    ├── src/routes/     # API routes (KYC, prices)
-    └── src/lib/        # Utilities
-```
+- Fully encrypted position state on-chain.
+- Tier-gated leverage enforcement over encrypted values.
+- Confidential collateral with ERC7984 wrapper flow.
+- Client-side proof generation for KYC tier registration.
+- Full trade lifecycle UI: verify -> trade -> close -> unwrap.
 
-## 🚀 Quick Start
+## Contracts
+
+Located in `contracts/contracts/`:
+
+- `ConfidentialSynthVaultFHE.sol` - core confidential trading vault.
+- `ConfidentialTierManager.sol` - encrypted tier storage and leverage checks.
+- `ZKVerifier.sol` - Groth16 proof verification and tier registration.
+- `Groth16Verifier.sol` - generated verifier from current circuit/zkey.
+- `ConfidentialUSDC.sol` - ERC7984 confidential wrapper for USDC.
+- `ConfidentialSynthToken.sol` - confidential synth token per asset.
+
+## ZK Circuit
+
+Located in `circuits/`:
+
+- `tier_proof.circom`
+- `scripts/setup.ps1` (compile + setup + verifier/artifact export)
+
+Important:
+
+- Regenerating circuit artifacts changes verifier compatibility.
+- If you re-run circuit setup, redeploy `Groth16Verifier` + `ZKVerifier` and sync addresses.
+
+## Frontend + Backend
+
+- Frontend: `frontend/` (Next.js 16, React 19, wagmi, RainbowKit, viem).
+- Backend: `backend/` (Express + TypeScript) for KYC credential issuance and market utilities.
+- Relayer public decrypt endpoint: `frontend/app/api/fhe/public-decrypt/route.ts`.
+
+## Tech Stack
+
+- Solidity 0.8.x + Hardhat
+- Zama `@fhevm/solidity`
+- OpenZeppelin `@openzeppelin/confidential-contracts` (ERC7984)
+- Circom + snarkjs (Groth16)
+- Next.js 16 + React 19
+- wagmi + viem + RainbowKit
+- Express.js + TypeScript
+
+## Local Setup
 
 ### Prerequisites
+
 - Node.js 20+
-- npm or yarn
-- MetaMask or compatible wallet
+- npm
+- MetaMask (Sepolia)
 
-### Installation
+### Install
 
 ```bash
-# Install all dependencies
-npm install
-
-# Contracts
 cd contracts && npm install
-
-# Frontend
-cd frontend && npm install
-
-# Backend
-cd backend && npm install
-
-# Circuits
-cd circuits && npm install
+cd ../frontend && npm install
+cd ../backend && npm install
+cd ../circuits && npm install
 ```
 
-### Development
+### Environment
+
+- Copy `.env.example` in each package.
+- Ensure oracle keypair is consistent between:
+  - `contracts/.env` (`ORACLE_PUBKEY_AX`, `ORACLE_PUBKEY_AY`)
+  - `backend/.env` (`ORACLE_PRIVATE_KEY`)
+- Use the latest deployed Sepolia addresses from:
+  - `contracts/deployments/sepolia.json`
+  - `frontend/.env.local` or `frontend/lib/sepolia-defaults.json`
+
+### Run
 
 ```bash
-# Compile contracts
-cd contracts && npx hardhat compile
+# terminal 1
+cd backend
+npm run dev
 
-# Run backend
-cd backend && npm run dev
-
-# Run frontend
-cd frontend && npm run dev
+# terminal 2
+cd frontend
+npm run dev
 ```
 
-## 🔑 Key Features
+Open `http://localhost:3000`.
 
-### 1. Zero-Knowledge Identity
-- Circom circuit for tier verification
-- Groth16 proofs generated client-side
-- No PII stored on-chain
-- Credit score-based tier assignment
+## Deployment (Sepolia)
 
-### 2. Fully Homomorphic Encryption
-- Position data encrypted with Zama FHE
-- Leverage enforcement on ciphertext
-- `FHE.eq()`, `FHE.le()`, `FHE.mul()` operations
-- MEV-resistant trading
-
-### 3. ERC7984 Confidential Tokens
-- **ConfidentialSynthToken**: Encrypted synth balances (csAAPL, csTSLA, etc.)
-- **ConfidentialUSDC**: Encrypted collateral wrapper
-- OpenZeppelin standard compliance
-- Full balance privacy on-chain
-
-### 4. Tier-Based Leverage
-| Tier | Description | Max Leverage |
-|------|-------------|--------------|
-| 1 | Basic KYC | 2x |
-| 2 | Accredited Investor | 5x |
-| 3 | High Net Worth | 8x |
-| 4 | Institutional / QIB | 10x |
-
-### 4. Synthetic Assets
-- sAAPL, sTSLA, sNVDA, sSPY, sAMZN, sMSFT, sMETA, sNFLX, sAMD
-- Real-time price feeds (Finnhub + Bybit)
-- Long/Short positions
-- Automated liquidations
-
-## 🛠️ Technology Stack
-
-- **Smart Contracts**: Solidity 0.8.27, Hardhat, OpenZeppelin
-- **FHE**: Zama Protocol (@fhevm/solidity)
-- **Confidential Tokens**: OpenZeppelin ERC7984 (@openzeppelin/confidential-contracts)
-- **ZK Proofs**: Circom, snarkjs, Groth16
-- **Frontend**: Next.js 16, React 19, Tailwind CSS 4
-- **Web3**: Wagmi 2.x, RainbowKit, Viem
-- **Backend**: Express.js, TypeScript
-- **Network**: Sepolia Testnet
-
-## 📝 Smart Contracts
-
-### Core Contracts
-- `ConfidentialSynthVaultFHE.sol` - FHE-encrypted trading vault
-- `ConfidentialTierManager.sol` - Encrypted tier management
-- `ZKVerifier.sol` - Groth16 proof verification
-- `ConfidentialSynthToken.sol` - ERC7984 confidential synth tokens
-- `ConfidentialUSDC.sol` - ERC7984 USDC wrapper
-- `FeeModule.sol` - Protocol fee collection
-
-### Deployment
 ```bash
 cd contracts
-npx hardhat run scripts/deploy.ts --network sepolia
+npm run deploy:sepolia
 ```
 
-## 🎨 Frontend
+Then sync emitted addresses to frontend config/env.
 
-Built with Next.js 16 and React 19:
-- Trading terminal with live charts
-- Portfolio management
-- ZK proof generation UI
-- Wallet integration (RainbowKit)
-- Real-time price feeds
+## End-to-End Test Flow
 
-## 🔐 Security
+Use `TESTING_CHECKLIST.md`, or execute:
 
-- ZK proofs prevent identity leakage
-- FHE encryption hides position data
-- Reentrancy guards on all state changes
-- Pausable contracts for emergencies
-- Tier-based access control
+1. Connect wallet on Sepolia.
+2. Verify identity (ZK proof submission).
+3. Open encrypted position from Trade page.
+4. Close position from Portfolio page.
+5. Withdraw USDC from cUSDC via unwrap + finalize flow.
 
-## 📚 Documentation
+## Repository Notes
 
-- [Contracts README](./contracts/README.md)
-- [Frontend README](./frontend/README.md)
-- [Backend README](./backend/README.md)
-- [Circuits README](./circuits/README.md)
+- `frontend/public/circuits/*.wasm` and `*.zkey` are intentionally committed for browser proof generation.
+- `frontend/public/tfhe_bg.wasm` is required runtime asset for FHE browser initialization.
+- Never commit `.env`, `.env.local`, or private keys.
 
-## 🤝 Contributing
+## Documentation
 
-This project was built for the Zama Hackathon 2026.
+- `contracts/README.md`
+- `frontend/README.md`
+- `backend/README.md`
+- `circuits/README.md`
+- `TESTING_CHECKLIST.md`
 
-## 📄 License
+## License
 
 MIT
-
-## 🔗 Links
-
-- **GitHub**: https://github.com/Rohitamalraj/Ztocks
-- **Zama Protocol**: https://docs.zama.ai/protocol/
-
----
-
-## 📚 Documentation
-
-### ERC7984 Integration
-- **[ERC7984 Integration Guide](./ERC7984_INTEGRATION.md)** - Comprehensive guide to confidential tokens
-- **[Implementation Summary](./ERC7984_IMPLEMENTATION_SUMMARY.md)** - What was built and current status
-- **[Developer Quickstart](./DEVELOPER_QUICKSTART.md)** - Get started in 5 minutes
-
-### Technical Documentation
-- **[FHE Implementation](./FHE_IMPLEMENTATION_COMPLETE.md)** - Zama FHE integration details
-- **[Hackathon Brief](./CORRECTED_HACKATHON_BRIEF.md)** - Project overview for judges
-- **[Implementation Roadmap](./ZAMA_IMPLEMENTATION_ROADMAP.md)** - Development timeline
-
-### External Resources
-- [Zama Protocol Documentation](https://docs.zama.org/protocol)
-- [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts)
-- [ERC7984 Standard](https://docs.zama.org/protocol/examples/openzeppelin-confidential-contracts/erc7984)
-
-**Built with ❤️ for the Zama Hackathon 2026**

@@ -76,35 +76,56 @@ async function assessCreditScore(address: `0x${string}`): Promise<CreditScoreAss
   let usdcBalance = 0;
 
   const client = chainClients.getSepolia();
-  try {
-    txCount = await client.getTransactionCount({ address });
-  } catch (err) {
-    console.warn('[KYC] tx count read failed:', err);
-  }
 
-  try {
-    const nativeBalanceWei = await client.getBalance({ address });
-    nativeBalanceEth = Number(formatEther(nativeBalanceWei));
-  } catch (err) {
-    console.warn('[KYC] native balance read failed:', err);
-  }
+  // Wrap all RPC calls in a 10s overall timeout — if Sepolia RPC is slow,
+  // we gracefully fall back to tier 1 defaults rather than hanging 136s
+  const rpcTimeout = <T>(promise: Promise<T>, fallbackValue: T, label: string): Promise<T> =>
+    Promise.race([
+      promise,
+      new Promise<T>((resolve) =>
+        setTimeout(() => {
+          console.warn(`[KYC] ${label} timed out after 10s, using fallback`);
+          resolve(fallbackValue);
+        }, 10_000)
+      ),
+    ]).catch((err) => {
+      console.warn(`[KYC] ${label} failed:`, err?.message || err);
+      return fallbackValue;
+    });
+
+  // Run all reads in parallel with individual timeouts
+  const [txResult, balanceResult] = await Promise.all([
+    rpcTimeout(client.getTransactionCount({ address }), 0, 'tx count'),
+    rpcTimeout(client.getBalance({ address }), 0n, 'native balance'),
+  ]);
+
+  txCount = txResult;
+  nativeBalanceEth = Number(formatEther(balanceResult));
 
   // Only read USDC balance if an address is configured
   const isZeroAddress = USDC_TOKEN_ADDRESS === '0x0000000000000000000000000000000000000000';
   if (!isZeroAddress) {
     try {
       const [usdcRaw, usdcDecimals] = await Promise.all([
-        client.readContract({
-          address: USDC_TOKEN_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'balanceOf',
-          args: [address],
-        }) as Promise<bigint>,
-        client.readContract({
-          address: USDC_TOKEN_ADDRESS,
-          abi: ERC20_BALANCE_ABI,
-          functionName: 'decimals',
-        }) as Promise<number>,
+        rpcTimeout(
+          client.readContract({
+            address: USDC_TOKEN_ADDRESS,
+            abi: ERC20_BALANCE_ABI,
+            functionName: 'balanceOf',
+            args: [address],
+          }) as Promise<bigint>,
+          0n,
+          'usdc balance'
+        ),
+        rpcTimeout(
+          client.readContract({
+            address: USDC_TOKEN_ADDRESS,
+            abi: ERC20_BALANCE_ABI,
+            functionName: 'decimals',
+          }) as Promise<number>,
+          6,
+          'usdc decimals'
+        ),
       ]);
       usdcBalance = Number(formatUnits(usdcRaw, usdcDecimals));
     } catch (err) {

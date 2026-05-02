@@ -2,6 +2,8 @@
 
 > **Circom ZK circuits for privacy-preserving KYC tier verification**
 
+**Important:** Re-running `./scripts/setup.ps1` regenerates `Groth16Verifier.sol`, `tier_proof.zkey`, and `tier_proof.wasm`. Browser proofs only match contracts that embed that verifier. After a regenerate you must **redeploy `Groth16Verifier` + `ZKVerifier` (and optionally copy new addresses into `frontend/lib/sepolia-defaults.json`)** so Sepolia proofs still verify.
+
 This directory contains the Circom circuits that enable zero-knowledge proof generation for KYC tier verification without revealing personal identity data.
 
 ---

@@ -1,4 +1,4 @@
-# Zama FHE Implementation Roadmap for zkSynth
+# Zama FHE Implementation Roadmap for Ztocks
 
 ## Current Status: FHE-Ready Architecture (Not FHE-Native)
 
@@ -296,10 +296,10 @@ If you don't have time to implement full FHE before the deadline, **be transpare
 ### Update Your Pitch
 
 **Current (Overstated):**
-> "zkSynth uses Fully Homomorphic Encryption to keep your entire trading position encrypted on-chain"
+> "Ztocks uses Fully Homomorphic Encryption to keep your entire trading position encrypted on-chain"
 
 **Honest (Accurate):**
-> "zkSynth combines ZK proofs for identity privacy with an FHE-ready architecture for position confidentiality. Our current demo uses ZK-verified tier enforcement on Sepolia, with full FHE encryption planned for Zama mainnet deployment."
+> "Ztocks combines ZK proofs for identity privacy with an FHE-ready architecture for position confidentiality. Our current demo uses ZK-verified tier enforcement on Sepolia, with full FHE encryption planned for Zama mainnet deployment."
 
 ### Update Your Brief
 
@@ -318,7 +318,7 @@ Add this disclaimer:
 
 | Protocol | Privacy | MEV Protection | Compliance | FHE | Status |
 |----------|---------|----------------|------------|-----|--------|
-| zkSynth × Zama | ✅ ZK identity | ✅ Tier-gated | ✅ KYC tiers | 🚧 In progress | Demo live |
+| Ztocks × Zama | ✅ ZK identity | ✅ Tier-gated | ✅ KYC tiers | 🚧 In progress | Demo live |
 
 ---
 

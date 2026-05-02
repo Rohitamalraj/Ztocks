@@ -1,8 +1,8 @@
-# ✅ FHE Implementation Complete - zkSynth × Zama
+# ✅ FHE Implementation Complete - Ztocks × Zama
 
 ## 🎉 Status: PRODUCTION-READY FHE CONTRACTS
 
-Your zkSynth project now has **REAL FHE encryption** implemented using Zama's `@fhevm/solidity` library!
+Your Ztocks project now has **REAL FHE encryption** implemented using Zama's `@fhevm/solidity` library!
 
 ---
 
@@ -280,7 +280,7 @@ Use the **CORRECTED_HACKATHON_BRIEF.md** file I created, which now accurately re
 
 ## Key Differentiators
 
-### What Makes zkSynth Unique:
+### What Makes Ztocks Unique:
 
 1. **Only protocol combining ZK + FHE**
    - ZK for identity privacy
