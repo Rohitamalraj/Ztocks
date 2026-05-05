@@ -99,13 +99,25 @@ export async function buildEncryptedVaultInputs(params: {
   leverage:        number;
   executionPrice:  bigint;
 }): Promise<EncryptedInput> {
-  const api   = await getInstance();
-  const input = api.createEncryptedInput(params.contractAddress, params.userAddress);
-  input.addBool(params.isLong);
-  input.add64(params.collateral);
-  input.add8(params.leverage);
-  input.add64(params.executionPrice);
-  return input.encrypt();
+  const res = await fetch("/api/fhe/encrypt-input", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mode: "vault",
+      contractAddress: params.contractAddress,
+      userAddress: params.userAddress,
+      isLong: params.isLong,
+      collateral: params.collateral.toString(),
+      leverage: params.leverage,
+      executionPrice: params.executionPrice.toString(),
+    }),
+  });
+
+  const data = (await res.json()) as { handles?: Hex[]; inputProof?: Hex; error?: string };
+  if (!res.ok || !data.handles || !data.inputProof) {
+    throw new Error(data.error ?? "Failed to encrypt trade inputs");
+  }
+  return { handles: data.handles, inputProof: data.inputProof };
 }
 
 /** Single `euint64` encrypted input (e.g. cUSDC unwrap amount). */
@@ -114,10 +126,22 @@ export async function buildEncryptedEuint64(params: {
   userAddress:     string;
   amount:          bigint;
 }): Promise<EncryptedInput> {
-  const api   = await getInstance();
-  const input = api.createEncryptedInput(params.contractAddress, params.userAddress);
-  input.add64(params.amount);
-  return input.encrypt();
+  const res = await fetch("/api/fhe/encrypt-input", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mode: "u64",
+      contractAddress: params.contractAddress,
+      userAddress: params.userAddress,
+      amount: params.amount.toString(),
+    }),
+  });
+
+  const data = (await res.json()) as { handles?: Hex[]; inputProof?: Hex; error?: string };
+  if (!res.ok || !data.handles || !data.inputProof) {
+    throw new Error(data.error ?? "Failed to encrypt unwrap input");
+  }
+  return { handles: data.handles, inputProof: data.inputProof };
 }
 
 export async function decryptEbool(

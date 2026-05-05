@@ -162,7 +162,7 @@ Verify on Etherscan:
 - ✅ State changes recorded
 
 **Synth vault (Sepolia)** — mirror `contracts/deployments/sepolia.json` (`ConfidentialSynthVaultFHE`):  
-https://sepolia.etherscan.io/address/0x5C830f25C41dc9Ae282f4F2fE20CF723Ae1cacE9
+https://sepolia.etherscan.io/address/0x0948E572486f8c24B140FF5d76431942eea4299d
 
 ---
 

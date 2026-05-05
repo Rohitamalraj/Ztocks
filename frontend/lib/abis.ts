@@ -86,6 +86,20 @@ export const SYNTH_VAULT_ABI = [
     outputs: [],
   },
   {
+    name: "openPositionHybrid",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "synthToken",     type: "address" },
+      { name: "isLong",         type: "bool" },
+      { name: "collateralUSDC", type: "uint256" },
+      { name: "encLeverage",    type: "bytes32" },
+      { name: "executionPrice", type: "uint256" },
+      { name: "inputProof",     type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
     name: "closePosition",
     type: "function",
     stateMutability: "nonpayable",

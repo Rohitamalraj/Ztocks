@@ -169,7 +169,10 @@ export default function TradePage() {
     <div className="min-h-screen bg-background pt-16">
       <AppNav
         onVerifyClick={() => setVerifyModalOpen(true)}
+        onPrepareTradingClick={() => { void vault.prepareTradingApprovals(); }}
         isVerified={isVerified}
+        isTradingPrepared={vault.isTradingPrepared}
+        isPreparingTrading={vault.txStatus === "preparing" || vault.txStatus === "approving-usdc"}
         tier={tier}
         usdcBalance={vault.usdcBalance}
       />
@@ -216,7 +219,7 @@ export default function TradePage() {
             usdcBalance={vault.usdcBalance}
             txStatus={vault.txStatus}
             onTrade={handleTrade}
-            isTrading={["approving-usdc", "wrapping", "setting-operator", "opening"].includes(vault.txStatus)}
+            isTrading={["preparing", "approving-usdc", "wrapping", "setting-operator", "opening"].includes(vault.txStatus)}
             onVerifyClick={() => setVerifyModalOpen(true)}
           />
         }

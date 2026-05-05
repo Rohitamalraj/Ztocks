@@ -18,6 +18,13 @@ contract ConfidentialTierManager is Ownable, ZamaEthereumConfig {
     /// @notice Encrypted tier per user (euint8: 1-4)
     mapping(address => euint8) private encryptedTier;
 
+    /// @notice Encrypted leverage cap per user (precomputed at setTier time so
+    ///         checkLeverage is a single FHE.le instead of a 4-iter scan).
+    /// @dev    Crucial for fitting `openPosition` under fhEVM Sepolia HCU caps
+    ///         (20M global / 5M depth per tx). Iterating tiers per check ate
+    ///         ~600K HCU and most of the depth budget.
+    mapping(address => euint8) private encryptedLeverageCap;
+
     /// @notice tier => max leverage cap (plaintext policy)
     mapping(uint8 => uint8) public maxLeverage;
 
@@ -80,24 +87,26 @@ contract ConfidentialTierManager is Ownable, ZamaEthereumConfig {
         // Allow this contract to use the tier for leverage checks
         FHE.allowThis(encryptedTier[user]);
 
+        // Precompute and cache the encrypted leverage cap for this user.
+        // checkLeverage() then collapses to a single FHE.le, saving a huge
+        // chunk of per-tx HCU vs scanning the 4 tiers each call.
+        encryptedLeverageCap[user] = FHE.asEuint8(maxLeverage[tier]);
+        FHE.allow(encryptedLeverageCap[user], user);
+        FHE.allowThis(encryptedLeverageCap[user]);
+
         emit TierSet(user);
     }
 
     /// @notice Check if requested leverage is valid for user's encrypted tier.
     /// @dev    Runs entirely on encrypted data — contract never sees plaintext.
+    ///         O(1) under fhEVM HCU accounting: one euint8 le on the cached
+    ///         encrypted cap (~58K HCU + depth 1).
     function checkLeverage(address user, euint8 requestedLeverage) external returns (ebool) {
-        euint8 userTier = encryptedTier[user];
-
-        ebool isValid = FHE.asEbool(false);
-        for (uint8 t = 1; t <= 4; t++) {
-            euint8 tierValue  = FHE.asEuint8(t);
-            ebool  isTier     = FHE.eq(userTier, tierValue);
-            euint8 cap        = FHE.asEuint8(maxLeverage[t]);
-            ebool  leverageOk = FHE.le(requestedLeverage, cap);
-            ebool  tierValid  = FHE.and(isTier, leverageOk);
-            isValid           = FHE.or(isValid, tierValid);
-        }
-
+        euint8 cap = encryptedLeverageCap[user];
+        ebool isValid = FHE.le(requestedLeverage, cap);
+        // Caller (vault) needs to use the result in selects, so authorize it.
+        FHE.allowThis(isValid);
+        FHE.allow(isValid, msg.sender);
         return isValid;
     }
 

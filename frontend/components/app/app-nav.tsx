@@ -9,12 +9,22 @@ import { useAccount } from "wagmi";
 
 interface AppNavProps {
   onVerifyClick?: () => void;
+  onPrepareTradingClick?: () => void;
   isVerified?: boolean;
+  isTradingPrepared?: boolean;
+  isPreparingTrading?: boolean;
   tier?: number;
   usdcBalance?: number;
 }
 
-export function AppNav({ onVerifyClick, isVerified: isVerifiedProp, tier: tierProp }: AppNavProps = {}) {
+export function AppNav({
+  onVerifyClick,
+  onPrepareTradingClick,
+  isVerified: isVerifiedProp,
+  isTradingPrepared = false,
+  isPreparingTrading = false,
+  tier: tierProp,
+}: AppNavProps = {}) {
   const pathname = usePathname();
   const { isConnected } = useAccount();
   const isVerified = isVerifiedProp ?? false;
@@ -154,6 +164,24 @@ export function AppNav({ onVerifyClick, isVerified: isVerifiedProp, tier: tierPr
                     : <Shield className="w-3 h-3" />
                   }
                   {isVerified ? "Verified" : "Verify Identity"}
+                </button>
+              )}
+
+              {!isLandingPage && isConnected && !!onPrepareTradingClick && (
+                <button
+                  onClick={onPrepareTradingClick}
+                  disabled={isPreparingTrading}
+                  className={`flex items-center gap-1.5 font-mono text-[10px] px-3 py-1.5 border transition-all duration-200 ${
+                    isTradingPrepared
+                      ? "border-blue-600/30 text-blue-700 hover:bg-blue-700/5"
+                      : "border-orange-500/40 text-orange-600 hover:bg-orange-500/5"
+                  } ${isPreparingTrading ? "opacity-70 cursor-not-allowed" : ""}`}
+                >
+                  {isPreparingTrading
+                    ? "Enabling..."
+                    : isTradingPrepared
+                    ? "Trading Enabled"
+                    : "Enable Trading"}
                 </button>
               )}
 

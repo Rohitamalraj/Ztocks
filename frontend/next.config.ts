@@ -8,6 +8,18 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+  // Keep native-WASM Node packages out of webpack's server bundle.
+  // node-tfhe / node-tkms load their sibling *_bg.wasm via `__dirname`,
+  // which breaks once they're inlined into `.next/.../vendor-chunks/`.
+  // Letting Next `require()` them from node_modules at runtime preserves
+  // the sibling-file layout the relayer SDK expects.
+  serverExternalPackages: [
+    "@zama-fhe/relayer-sdk",
+    "node-tfhe",
+    "node-tkms",
+    "tfhe",
+    "tkms",
+  ],
   webpack: (config, { isServer, webpack }) => {
     // Fix for fhevmjs and libsodium-wrappers
     config.resolve.fallback = {
@@ -50,7 +62,15 @@ const nextConfig: NextConfig = {
     // Do NOT stub these out — fhevmjs needs the real WASM files.
 
     if (isServer) {
-      config.externals = [...(config.externals || []), "fhevmjs", "libsodium-wrappers"];
+      config.externals = [
+        ...(config.externals || []),
+        "fhevmjs",
+        "libsodium-wrappers",
+        "@zama-fhe/relayer-sdk",
+        "@zama-fhe/relayer-sdk/node",
+        "node-tfhe",
+        "node-tkms",
+      ];
     }
 
     return config;

@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     const network =
       process.env.NEXT_PUBLIC_RPC_URL?.trim() ||
       process.env.SEPOLIA_RPC_URL?.trim() ||
-      "https://ethereum-sepolia-rpc.publicnode.com";
+      "https://eth-sepolia.g.alchemy.com/v2/XJuG99UM3lVcFxwvSUF7U";
 
     const instance = await createInstance({
       ...SepoliaConfig,
