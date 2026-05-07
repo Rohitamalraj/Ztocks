@@ -7,6 +7,9 @@ type EncryptedInput = {
   inputProof: Hex;
 };
 
+const ENCRYPT_REQUEST_TIMEOUT_MS = 30_000;
+const ENCRYPT_REQUEST_RETRIES = 3;
+
 type FhevmInstance = {
   createEncryptedInput: (contractAddress: string, userAddress: string) => {
     addBool:  (value: boolean) => void;
@@ -99,25 +102,15 @@ export async function buildEncryptedVaultInputs(params: {
   leverage:        number;
   executionPrice:  bigint;
 }): Promise<EncryptedInput> {
-  const res = await fetch("/api/fhe/encrypt-input", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mode: "vault",
-      contractAddress: params.contractAddress,
-      userAddress: params.userAddress,
-      isLong: params.isLong,
-      collateral: params.collateral.toString(),
-      leverage: params.leverage,
-      executionPrice: params.executionPrice.toString(),
-    }),
+  return postEncryptedInput({
+    mode: "vault",
+    contractAddress: params.contractAddress,
+    userAddress: params.userAddress,
+    isLong: params.isLong,
+    collateral: params.collateral.toString(),
+    leverage: params.leverage,
+    executionPrice: params.executionPrice.toString(),
   });
-
-  const data = (await res.json()) as { handles?: Hex[]; inputProof?: Hex; error?: string };
-  if (!res.ok || !data.handles || !data.inputProof) {
-    throw new Error(data.error ?? "Failed to encrypt trade inputs");
-  }
-  return { handles: data.handles, inputProof: data.inputProof };
 }
 
 /** Single `euint64` encrypted input (e.g. cUSDC unwrap amount). */
@@ -126,22 +119,45 @@ export async function buildEncryptedEuint64(params: {
   userAddress:     string;
   amount:          bigint;
 }): Promise<EncryptedInput> {
-  const res = await fetch("/api/fhe/encrypt-input", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mode: "u64",
-      contractAddress: params.contractAddress,
-      userAddress: params.userAddress,
-      amount: params.amount.toString(),
-    }),
+  return postEncryptedInput({
+    mode: "u64",
+    contractAddress: params.contractAddress,
+    userAddress: params.userAddress,
+    amount: params.amount.toString(),
   });
+}
 
-  const data = (await res.json()) as { handles?: Hex[]; inputProof?: Hex; error?: string };
-  if (!res.ok || !data.handles || !data.inputProof) {
-    throw new Error(data.error ?? "Failed to encrypt unwrap input");
+async function postEncryptedInput(payload: Record<string, unknown>): Promise<EncryptedInput> {
+  let lastErr: unknown;
+
+  for (let attempt = 1; attempt <= ENCRYPT_REQUEST_RETRIES; attempt++) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), ENCRYPT_REQUEST_TIMEOUT_MS);
+    try {
+      const res = await fetch("/api/fhe/encrypt-input", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ac.signal,
+      });
+      const data = (await res.json()) as { handles?: Hex[]; inputProof?: Hex; error?: string };
+      if (!res.ok || !data.handles || !data.inputProof) {
+        throw new Error(data.error ?? "Failed to encrypt input");
+      }
+      return { handles: data.handles, inputProof: data.inputProof };
+    } catch (err) {
+      lastErr = err;
+      if (attempt < ENCRYPT_REQUEST_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
-  return { handles: data.handles, inputProof: data.inputProof };
+
+  throw new Error(
+    lastErr instanceof Error ? lastErr.message : "Encryption request failed after retries",
+  );
 }
 
 export async function decryptEbool(

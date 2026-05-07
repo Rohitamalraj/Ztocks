@@ -3,6 +3,17 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+type RelayerInstance = {
+  createEncryptedInput: (contractAddress: `0x${string}`, userAddress: `0x${string}`) => {
+    addBool: (value: boolean) => void;
+    add64: (value: bigint) => void;
+    add8: (value: number) => void;
+    encrypt: () => Promise<{ handles: Uint8Array[]; inputProof: Uint8Array }>;
+  };
+};
+
+let relayerInstancePromise: Promise<RelayerInstance> | null = null;
+
 type EncryptVaultBody = {
   mode: "vault";
   contractAddress: `0x${string}`;
@@ -27,16 +38,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const { createInstance, SepoliaConfig } = await import("@zama-fhe/relayer-sdk/node");
     const network =
       process.env.NEXT_PUBLIC_RPC_URL?.trim() ||
       process.env.SEPOLIA_RPC_URL?.trim() ||
       "https://eth-sepolia.g.alchemy.com/v2/XJuG99UM3lVcFxwvSUF7U";
 
-    const instance = await createInstance({
-      ...SepoliaConfig,
-      network,
-    });
+    if (!relayerInstancePromise) {
+      relayerInstancePromise = (async () => {
+        const { createInstance, SepoliaConfig } = await import("@zama-fhe/relayer-sdk/node");
+        return (await createInstance({
+          ...SepoliaConfig,
+          network,
+        })) as RelayerInstance;
+      })();
+    }
+    const instance = await relayerInstancePromise;
 
     const input = instance.createEncryptedInput(body.contractAddress, body.userAddress);
     if (body.mode === "vault") {

@@ -72,6 +72,36 @@ export const TIER_MANAGER_ABI = [
 
 export const SYNTH_VAULT_ABI = [
   {
+    name: "lockCollateralConfidential",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "encCollateralUSDC", type: "bytes32" },
+      { name: "inputProof", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "openPositionFromLocked",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "synthToken", type: "address" },
+      { name: "encIsLong", type: "bytes32" },
+      { name: "encLeverage", type: "bytes32" },
+      { name: "encExecutionPrice", type: "bytes32" },
+      { name: "inputProof", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "claimSynthForPosition",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "positionId", type: "uint256" }],
+    outputs: [],
+  },
+  {
     name: "openPosition",
     type: "function",
     stateMutability: "nonpayable",

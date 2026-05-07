@@ -63,6 +63,8 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
 
     /// @dev user address → array of positions (append-only, closed positions kept)
     mapping(address => EncryptedPosition[]) public positions;
+    /// @dev Fully confidential flow staging area: user -> locked encrypted collateral.
+    mapping(address => euint64) private lockedCollateral;
     /// @dev Plain collateral mirror for fallback hybrid path (used on close).
     mapping(address => mapping(uint256 => uint256)) public positionCollateralPlain;
 
@@ -79,6 +81,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         uint256 indexed positionId,
         uint256 closeTime
     );
+    event SynthClaimed(address indexed user, uint256 indexed positionId);
 
     event Liquidated(
         address indexed user,
@@ -88,6 +91,7 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     );
 
     event AssetRegistered(address indexed synthToken);
+    event CollateralLocked(address indexed user);
 
     // ─── Errors ──────────────────────────────────────────────────────────────
     error NotEligible(address user);
@@ -100,6 +104,8 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
     error HealthyPosition();
     error InsufficientCollateral();
     error InvalidExecutionPrice();
+    error NoLockedCollateral(address user);
+    error PositionNotOpen(uint256 positionId);
 
     // ─── Constructor ─────────────────────────────────────────────────────────
     constructor(
@@ -133,6 +139,90 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
 
     // ─── Core: Open Position ─────────────────────────────────────────────────
 
+    /// @notice Step 1 (full-confidential flow): lock encrypted cUSDC collateral in vault custody.
+    /// @dev    Uses ERC-7984 confidentialTransferFrom with encrypted amount/proof.
+    function lockCollateralConfidential(
+        externalEuint64 encCollateralUSDC,
+        bytes calldata inputProof
+    ) external nonReentrant whenNotPaused {
+        if (!zkVerifier.isVerified(msg.sender)) revert NotEligible(msg.sender);
+        euint64 transferredCollateral = collateralToken.confidentialTransferFrom(
+            msg.sender,
+            address(this),
+            encCollateralUSDC,
+            inputProof
+        );
+        FHE.allowThis(transferredCollateral);
+        lockedCollateral[msg.sender] = transferredCollateral;
+        emit CollateralLocked(msg.sender);
+    }
+
+    /// @notice Step 2 (full-confidential flow): open position from previously locked collateral.
+    /// @dev    Keeps all sensitive trade params encrypted in this step.
+    function openPositionFromLocked(
+        address synthToken,
+        externalEbool encIsLong,
+        externalEuint8 encLeverage,
+        externalEuint64 encExecutionPrice,
+        bytes calldata inputProof
+    ) external nonReentrant whenNotPaused {
+        if (!zkVerifier.isVerified(msg.sender)) revert NotEligible(msg.sender);
+        if (!registeredAssets[synthToken]) revert AssetNotRegistered(synthToken);
+
+        euint64 collateralUSDC = lockedCollateral[msg.sender];
+        if (!FHE.isInitialized(collateralUSDC)) revert NoLockedCollateral(msg.sender);
+
+        ebool isLong = FHE.fromExternal(encIsLong, inputProof);
+        euint8 leverageInput = FHE.fromExternal(encLeverage, inputProof);
+        euint64 executionPrice = FHE.fromExternal(encExecutionPrice, inputProof);
+
+        // TierManager must be authorized to operate on leverageInput handle.
+        FHE.allow(leverageInput, address(tierManager));
+        ebool leverageValid = tierManager.checkLeverage(msg.sender, leverageInput);
+        euint8 leverage = FHE.select(leverageValid, leverageInput, FHE.asEuint8(0));
+        // Persist vault access for later claim-time FHE arithmetic.
+        FHE.allowThis(leverage);
+
+        // Keep open tx lightweight: defer encrypted sizing/mint to claim step.
+        euint64 synthAmount = collateralUSDC;
+
+        uint256 positionId = positions[msg.sender].length;
+        positions[msg.sender].push(EncryptedPosition({
+            asset: synthToken,
+            isLong: isLong,
+            collateralUSDC: collateralUSDC,
+            leverage: leverage,
+            entryPrice: executionPrice,
+            synthAmount: synthAmount,
+            openTime: block.timestamp,
+            isOpen: true
+        }));
+
+        // Clear staging collateral after successful open.
+        lockedCollateral[msg.sender] = FHE.asEuint64(0);
+
+        FHE.allow(isLong, msg.sender);
+        FHE.allow(collateralUSDC, msg.sender);
+        FHE.allow(leverage, msg.sender);
+        FHE.allow(executionPrice, msg.sender);
+        FHE.allow(synthAmount, msg.sender);
+
+        emit PositionOpened(msg.sender, positionId, synthToken, block.timestamp);
+    }
+
+    /// @notice Step 3 (full-confidential flow): mint confidential synth for an already opened position.
+    /// @dev    Kept separate from openPositionFromLocked to fit Sepolia per-tx execution limits.
+    function claimSynthForPosition(uint256 positionId) external nonReentrant whenNotPaused {
+        if (positionId >= positions[msg.sender].length) revert PositionNotFound(positionId);
+        EncryptedPosition storage pos = positions[msg.sender][positionId];
+        if (!pos.isOpen) revert PositionNotOpen(positionId);
+        euint64 claimAmount = FHE.mul(pos.collateralUSDC, pos.leverage);
+        // Grant synth token contract access to consume the encrypted handle.
+        FHE.allow(claimAmount, pos.asset);
+        ConfidentialSynthToken(pos.asset).mint(msg.sender, claimAmount);
+        emit SynthClaimed(msg.sender, positionId);
+    }
+
     /// @notice Open a leveraged synthetic position with ENCRYPTED inputs.
     /// @dev THE KEY FHE ENFORCEMENT: leverage is checked against tier cap using FHE operations.
     ///      The contract NEVER sees plaintext collateral, leverage, or direction.
@@ -161,6 +251,8 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         euint8  leverageInput  = FHE.fromExternal(encLeverage, inputProof);
         euint64 executionPrice = FHE.fromExternal(encExecutionPrice, inputProof);
 
+        // TierManager must be authorized to operate on leverageInput handle.
+        FHE.allow(leverageInput, address(tierManager));
         // 4. THE KEY FHE ENFORCEMENT: clamp leverage against the user's
         //    encrypted tier cap. If invalid, leverage becomes 0 and the
         //    position is effectively unleveraged — the user can close any
@@ -168,6 +260,8 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         //    transfer (refund), which alone would blow the per-tx HCU cap.
         ebool leverageValid = tierManager.checkLeverage(msg.sender, leverageInput);
         euint8 leverage = FHE.select(leverageValid, leverageInput, FHE.asEuint8(0));
+        // Persist vault access for later claim-time FHE arithmetic.
+        FHE.allowThis(leverage);
 
         // 5. Pull confidential collateral (requires cUSDC operator approval).
         //    This is the only confidential transfer in the path. The

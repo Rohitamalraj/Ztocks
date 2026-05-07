@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   useAccount,
   useWalletClient,
@@ -14,8 +14,9 @@ import { toast } from "sonner";
 import { waitForHash } from "@/lib/tx-utils";
 import { wagmiConfig } from "@/lib/wagmi";
 import { CONTRACTS, ASSET_TOKENS, TOKEN_SYMBOL } from "@/lib/contracts";
-import { SYNTH_VAULT_ABI, ERC20_ABI, CUSDC_ABI } from "@/lib/abis";
+import { SYNTH_VAULT_ABI, ERC20_ABI, CUSDC_ABI, ZK_VERIFIER_ABI } from "@/lib/abis";
 import {
+  buildEncryptedVaultInputs,
   buildEncryptedEuint64,
   decryptEbool,
   decryptEuint64,
@@ -116,6 +117,9 @@ function toFriendlyTxMessage(err: unknown): string {
   if (msg.includes("not_ready") || msg.includes("not ready for decryption")) {
     return "Relayer is preparing public decryption. Wait a few seconds and retry finalize."
   }
+  if (msg.includes("aborted") || msg.includes("abort")) {
+    return "Encryption request timed out. Please retry once."
+  }
 
   return raw.slice(0, 180)
 }
@@ -146,6 +150,7 @@ export function useVault() {
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txError, setTxError]   = useState<string | null>(null);
   const [allPositions, setAllPositions] = useState<OnChainPosition[]>([]);
+  const openPositionInFlightRef = useRef(false);
 
   const { writeContractAsync } = useWriteContract();
 
@@ -169,14 +174,18 @@ export function useVault() {
     address: CONTRACTS.USDC as `0x${string}`,
     abi: ERC20_ABI,
     functionName: "allowance",
-    // openPositionHybrid pulls plaintext USDC directly from the user via SynthVault,
-    // so we track allowance to the vault (not cUSDC).
-    args: address ? [address, CONTRACTS.SynthVault as `0x${string}`] : undefined,
-    query: { enabled: !!address && !!CONTRACTS.USDC && !!CONTRACTS.SynthVault },
+    // Full confidential flow wraps USDC -> cUSDC, so allowance must target cUSDC.
+    args: address ? [address, CONTRACTS.CUSDC as `0x${string}`] : undefined,
+    query: { enabled: !!address && !!CONTRACTS.USDC && !!CONTRACTS.CUSDC },
   });
 
-  // openPositionHybrid pulls plaintext USDC directly and performs the confidential
-  // wrapping inside the vault, so we don't need any cUSDC operator checks here.
+  const { data: operatorApproved } = useReadContract({
+    address: CONTRACTS.CUSDC as `0x${string}`,
+    abi: CUSDC_ABI,
+    functionName: "isOperator",
+    args: address ? [address, CONTRACTS.SynthVault as `0x${string}`] : undefined,
+    query: { enabled: !!address && !!CONTRACTS.CUSDC && !!CONTRACTS.SynthVault },
+  });
 
   const openPosition = useCallback(async (
     asset: AssetSymbol,
@@ -186,6 +195,13 @@ export function useVault() {
     executionPriceNum: number
   ) => {
     if (!address) return false;
+    if (openPositionInFlightRef.current) {
+      const inFlightMsg = "Trade already in progress. Please wait for the current flow to finish.";
+      setTxError(inFlightMsg);
+      toast.error("Transaction in progress", { id: "tx", description: inFlightMsg });
+      return false;
+    }
+    openPositionInFlightRef.current = true;
     setTxError(null);
 
     try {
@@ -201,6 +217,20 @@ export function useVault() {
       if (!CONTRACTS.SynthVault) {
         throw new Error("Vault address not configured. Set NEXT_PUBLIC_SYNTH_VAULT_ADDRESS and retry.");
       }
+      // Hard preflight against the currently deployed verifier used by this frontend build.
+      // Prevents wasting wrap/lock txs if the wallet has not re-verified after redeploy.
+      if (CONTRACTS.ZKVerifier) {
+        const { readContract } = await import("@wagmi/core");
+        const verified = await readContract(wagmiConfig, {
+          address: CONTRACTS.ZKVerifier as `0x${string}`,
+          abi: ZK_VERIFIER_ABI,
+          functionName: "isVerified",
+          args: [address],
+        }) as boolean;
+        if (!verified) {
+          throw new Error("Identity verification required on current deployment. Click Verify first.");
+        }
+      }
       console.group(`%c[Ztocks:vault] openPosition`, "color:#34d399;font-weight:bold");
       console.log("Asset:", asset, "| Direction:", direction, "| Collateral:", collateralNum, "USDC | Leverage:", leverage + "x", "| API Price:", executionPriceNum);
       
@@ -213,37 +243,106 @@ export function useVault() {
       }
       console.log("[Pre-flight] ✓ USDC balance sufficient:", Number(usdcBalance) / 1e6, "USDC");
       
-      // Check USDC allowance for vault pull (must be prepared beforehand)
+      // Check USDC allowance for cUSDC wrapping (must be prepared beforehand)
       console.log("[Pre-flight] USDC allowance:", usdcAllowance?.toString(), "| Required:", collateralBn.toString());
       if (!usdcAllowance || usdcAllowance < collateralBn) {
         throw new Error("Trading allowance not ready. Click 'Enable Trading' in the top-right first.");
       }
-      console.log("[1/2] Trading allowance already prepared");
+      if (!operatorApproved) {
+        throw new Error("cUSDC operator approval missing. Click 'Enable Trading' in the top-right first.");
+      }
+      console.log("[1/4] Trading approvals ready");
+
+      // Step 2: wrap USDC -> cUSDC
+      setTxStatus("wrapping");
+      console.log("[2/4] Wrapping USDC into cUSDC...");
+      const wrapHash = await writeContractAsync({
+        address: CONTRACTS.CUSDC as `0x${string}`,
+        abi: CUSDC_ABI,
+        functionName: "wrap",
+        args: [address, collateralBn],
+        chainId: sepolia.id,
+      });
+      await waitForHash(wrapHash);
+      console.log("[2/4] ✓ cUSDC wrapped", wrapHash);
+
+      // Step 3: lock encrypted collateral in vault
+      const encCollateral = await buildEncryptedEuint64({
+        // lockCollateralConfidential forwards encrypted amount to cUSDC
+        // confidentialTransferFrom, so proof must be bound to cUSDC.
+        contractAddress: CONTRACTS.CUSDC,
+        // cUSDC.fromExternal is executed inside a call initiated by the vault.
+        // Bind the input to vault caller context for this forwarded transfer.
+        userAddress: CONTRACTS.SynthVault as `0x${string}`,
+        amount: collateralBn,
+      });
+      console.log("[3/4] Locking encrypted collateral in vault...");
+      const lockHash = await writeContractAsync({
+        address: CONTRACTS.SynthVault as `0x${string}`,
+        abi: SYNTH_VAULT_ABI,
+        functionName: "lockCollateralConfidential",
+        args: [encCollateral.handles[0], encCollateral.inputProof],
+        chainId: sepolia.id,
+        gas: 12_000_000n,
+      });
+      await waitForHash(lockHash);
+      console.log("[3/4] ✓ Collateral locked", lockHash);
+
+      // Step 4: open encrypted position from locked collateral
+      const encrypted = await buildEncryptedVaultInputs({
+        contractAddress: CONTRACTS.SynthVault,
+        userAddress: address,
+        isLong: direction === "LONG",
+        collateral: collateralBn,
+        leverage,
+        executionPrice,
+      });
 
       setTxStatus("opening");
-      console.log("[2/2] Calling SynthVault.openPositionHybrid...");
+      console.log("[4/4] Calling SynthVault.openPositionFromLocked...");
       toast.loading("Opening position...", { id: "tx" });
       const hash = await writeContractAsync({
         address: CONTRACTS.SynthVault as `0x${string}`,
         abi: SYNTH_VAULT_ABI,
-        functionName: "openPositionHybrid",
+        functionName: "openPositionFromLocked",
         args: [
           tokenAddress,
-          direction === "LONG",
-          collateralBn,
-          "0x0000000000000000000000000000000000000000000000000000000000000000", // unused in fallback path
-          executionPrice, // plain executionPrice (8 decimals)
-          "0x",
+          encrypted.handles[0], // isLong
+          encrypted.handles[2], // leverage
+          encrypted.handles[3], // executionPrice
+          encrypted.inputProof,
         ],
         chainId: sepolia.id,
-        // Some Sepolia RPC paths (incl. wallet defaults) reject oversized
-        // gas limits with "gas limit too high". Pin a sane ceiling to avoid
-        // wallet-side overestimation caps.
         gas: 12_000_000n,
       });
       console.log("[3/3] Tx submitted:", hash);
-      await waitForHash(hash);
+      const { waitForTransactionReceipt } = await import("@wagmi/core");
+      const receipt = await waitForTransactionReceipt(wagmiConfig, { hash });
       console.log("[3/3] ✓ Position tx confirmed", hash);
+
+      // Step 5: mint confidential synth in a separate tx (keeps open tx lightweight).
+      const vaultLc = (CONTRACTS.SynthVault as string).toLowerCase();
+      const opened = parseEventLogs({
+        abi: SYNTH_VAULT_ABI,
+        logs: receipt.logs.filter((l) => l.address.toLowerCase() === vaultLc),
+        eventName: "PositionOpened",
+      });
+      const positionId = opened[0]?.args.positionId as bigint | undefined;
+      if (positionId !== undefined) {
+        console.log("[5/5] Claiming confidential synth...");
+        const claimHash = await writeContractAsync({
+          address: CONTRACTS.SynthVault as `0x${string}`,
+          abi: SYNTH_VAULT_ABI,
+          functionName: "claimSynthForPosition",
+          args: [positionId],
+          chainId: sepolia.id,
+          gas: 12_000_000n,
+        });
+        await waitForHash(claimHash);
+        console.log("[5/5] ✓ Synth claimed", claimHash);
+      } else {
+        console.warn("[Ztocks:vault] PositionOpened log missing; skipping synth claim step");
+      }
       await refetchPositions();
       setTxStatus("success");
       toast.success("Position opened", { id: "tx" });
@@ -260,26 +359,37 @@ export function useVault() {
       toast.error("Transaction failed", { id: "tx", description: msg });
       setTimeout(() => setTxStatus("idle"), 5000);
       return false;
+    } finally {
+      openPositionInFlightRef.current = false;
     }
-  }, [address, usdcBalance, usdcAllowance, writeContractAsync, refetchPositions]);
+  }, [address, usdcBalance, usdcAllowance, operatorApproved, writeContractAsync, refetchPositions]);
 
   const prepareTradingApprovals = useCallback(async () => {
     if (!address) return false;
     setTxError(null);
     try {
-      if (!CONTRACTS.USDC || !CONTRACTS.SynthVault) {
+      if (!CONTRACTS.USDC || !CONTRACTS.CUSDC || !CONTRACTS.SynthVault) {
         throw new Error("Trading contracts are not configured.");
       }
       setTxStatus("preparing");
       toast.loading("Enabling trading approvals...", { id: "tx-prepare" });
-      const hash = await writeContractAsync({
+      const approveHash = await writeContractAsync({
         address: CONTRACTS.USDC as `0x${string}`,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [CONTRACTS.SynthVault as `0x${string}`, maxUint256],
+        args: [CONTRACTS.CUSDC as `0x${string}`, maxUint256],
         chainId: sepolia.id,
       });
-      await waitForHash(hash);
+      await waitForHash(approveHash);
+      const until = BigInt(Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30);
+      const operatorHash = await writeContractAsync({
+        address: CONTRACTS.CUSDC as `0x${string}`,
+        abi: CUSDC_ABI,
+        functionName: "setOperator",
+        args: [CONTRACTS.SynthVault as `0x${string}`, until],
+        chainId: sepolia.id,
+      });
+      await waitForHash(operatorHash);
       setTxStatus("success");
       toast.success("Trading approvals enabled", { id: "tx-prepare" });
       setTimeout(() => setTxStatus("idle"), 2500);
@@ -530,7 +640,7 @@ export function useVault() {
     txStatus,
     txError,
     usdcBalance: usdcBalance ? Number(usdcBalance) / 1e6 : 0,
-    isTradingPrepared: !!usdcAllowance && usdcAllowance > 0n,
+    isTradingPrepared: !!usdcAllowance && usdcAllowance > 0n && !!operatorApproved,
     refetchPositions,
   };
 }
