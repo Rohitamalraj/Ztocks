@@ -355,7 +355,12 @@ sequenceDiagram
     User->>Frontend: Click "Close" on open position
     Frontend->>Vault: closePosition(positionId, executionPrice)
     Vault->>Vault: Verify position is open and belongs to user
-    Vault->>Vault: Refund plaintext USDC (hybrid path) to user
+    alt Full confidential position
+        Vault->>cUSDC: confidentialTransfer(user, pos.collateralUSDC)
+        note over Vault,cUSDC: Returns encrypted cUSDC handle to user.<br/>User must then unwrap to get plain USDC.
+    else Hybrid position (fallback)
+        Vault->>Vault: safeTransfer(user, plainCollateral)
+    end
     Vault-->>Frontend: PositionClosed event
 
     User->>Frontend: Click "Unwrap cUSDC"
@@ -412,31 +417,31 @@ Located in `circuits/tier_proof.circom`. The circuit proves:
 
 ## Deployed Contracts — Sepolia Testnet
 
-> Deployed: 2026-05-07 · Deployer: `0x2c32743B801B9c3d53099334e2ac5a8DA39498bC`
+> Last deployed: 2026-05-08 · Deployer: `0x2c32743B801B9c3d53099334e2ac5a8DA39498bC`
 
 ### Core Infrastructure
 
 | Contract | Address |
 |---|---|
 | Underlying USDC | [`0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238`](https://sepolia.etherscan.io/address/0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238) |
-| ConfidentialUSDC (cUSDC) | [`0x2EDb8B37953d1DF4a3327bea7f954eA5554ca597`](https://sepolia.etherscan.io/address/0x2EDb8B37953d1DF4a3327bea7f954eA5554ca597) |
-| ZKVerifier | [`0x85D5fA6C7a95Bf8d3E12032d340C6Ddeebe94385`](https://sepolia.etherscan.io/address/0x85D5fA6C7a95Bf8d3E12032d340C6Ddeebe94385) |
-| ConfidentialTierManager | [`0x3CDF8B84B6f08952247089aa698256E469365128`](https://sepolia.etherscan.io/address/0x3CDF8B84B6f08952247089aa698256E469365128) |
-| ConfidentialSynthVaultFHE | [`0xA9303fF011d31E3097A6bA8a9E7F2317f53222A2`](https://sepolia.etherscan.io/address/0xA9303fF011d31E3097A6bA8a9E7F2317f53222A2) |
+| ConfidentialUSDC (cUSDC) | [`0xfDBFC62F97A7988515a2684fA427d449fA7a6BAe`](https://sepolia.etherscan.io/address/0xfDBFC62F97A7988515a2684fA427d449fA7a6BAe) |
+| ZKVerifier | [`0xE1936D15f2F4dE2e5599d211EA13B6b791F65E84`](https://sepolia.etherscan.io/address/0xE1936D15f2F4dE2e5599d211EA13B6b791F65E84) |
+| ConfidentialTierManager | [`0x54f249A9E93b38f6113bF20d8943B95251E39D08`](https://sepolia.etherscan.io/address/0x54f249A9E93b38f6113bF20d8943B95251E39D08) |
+| ConfidentialSynthVaultFHE | [`0x48FF2EbcC730a1A6D38b4562c4F83196CEFe2940`](https://sepolia.etherscan.io/address/0x48FF2EbcC730a1A6D38b4562c4F83196CEFe2940) |
 
 ### Confidential Synthetic Tokens (ERC-7984)
 
 | Symbol | Underlying | Address |
 |---|---|---|
-| csAAPL | Apple Inc. | [`0xC274c633cf95d5828d5bddBB48BcB9dfA4a1e622`](https://sepolia.etherscan.io/address/0xC274c633cf95d5828d5bddBB48BcB9dfA4a1e622) |
-| csTSLA | Tesla Inc. | [`0x8D0678d276323F5E4877Ea4255043c3667Cc6328`](https://sepolia.etherscan.io/address/0x8D0678d276323F5E4877Ea4255043c3667Cc6328) |
-| csNVDA | NVIDIA Corp. | [`0x6b39fa1e4793e4D3823E4C98cCc068df3DE95F5f`](https://sepolia.etherscan.io/address/0x6b39fa1e4793e4D3823E4C98cCc068df3DE95F5f) |
-| csSPY | S&P 500 ETF | [`0x78FAc41B350873859b58EC6453aA430E1c8e3570`](https://sepolia.etherscan.io/address/0x78FAc41B350873859b58EC6453aA430E1c8e3570) |
-| csAMZN | Amazon.com Inc. | [`0x60f94A54f62896468058B92Cb5F138BFc8FE8447`](https://sepolia.etherscan.io/address/0x60f94A54f62896468058B92Cb5F138BFc8FE8447) |
-| csMSFT | Microsoft Corp. | [`0xf93F440cCc037F925bCBbA2E884C169Ba5572755`](https://sepolia.etherscan.io/address/0xf93F440cCc037F925bCBbA2E884C169Ba5572755) |
-| csMETA | Meta Platforms | [`0x4e86CDBb43FcF27992b5D5EFC2e4ac4226751DdD`](https://sepolia.etherscan.io/address/0x4e86CDBb43FcF27992b5D5EFC2e4ac4226751DdD) |
-| csNFLX | Netflix Inc. | [`0x2733c3D76876e813Be3867050c9b6eF9186ac230`](https://sepolia.etherscan.io/address/0x2733c3D76876e813Be3867050c9b6eF9186ac230) |
-| csAMD | Advanced Micro Devices | [`0x754a2b6Af331FE8EcA662D5dF1A342006ab4866A`](https://sepolia.etherscan.io/address/0x754a2b6Af331FE8EcA662D5dF1A342006ab4866A) |
+| csAAPL | Apple Inc. | [`0x23BB53D8B6704Cd1d4deE9ee21a6E5268eF2822b`](https://sepolia.etherscan.io/address/0x23BB53D8B6704Cd1d4deE9ee21a6E5268eF2822b) |
+| csTSLA | Tesla Inc. | [`0xb4A3C39f28F93591FB9F0cAB91dB1a55dA2ee021`](https://sepolia.etherscan.io/address/0xb4A3C39f28F93591FB9F0cAB91dB1a55dA2ee021) |
+| csNVDA | NVIDIA Corp. | [`0xbceaE25027249925c4D60E4Ca9B6bc6286C4Bf3E`](https://sepolia.etherscan.io/address/0xbceaE25027249925c4D60E4Ca9B6bc6286C4Bf3E) |
+| csSPY | S&P 500 ETF | [`0xE9bf94D03Be0825602E0574A184Cae9b3105196e`](https://sepolia.etherscan.io/address/0xE9bf94D03Be0825602E0574A184Cae9b3105196e) |
+| csAMZN | Amazon.com Inc. | [`0x401C67dfFdB067Da490dB7c6d74A76F35Bc72877`](https://sepolia.etherscan.io/address/0x401C67dfFdB067Da490dB7c6d74A76F35Bc72877) |
+| csMSFT | Microsoft Corp. | [`0x6fad7D2A098bB7FF15eb115B39926Ad4873E193C`](https://sepolia.etherscan.io/address/0x6fad7D2A098bB7FF15eb115B39926Ad4873E193C) |
+| csMETA | Meta Platforms | [`0xcaacC7Ff819239c1A803152ff3A08FAfdca2d149`](https://sepolia.etherscan.io/address/0xcaacC7Ff819239c1A803152ff3A08FAfdca2d149) |
+| csNFLX | Netflix Inc. | [`0x75Bb1459aEd9DF8633E02a75022Fb7695d933301`](https://sepolia.etherscan.io/address/0x75Bb1459aEd9DF8633E02a75022Fb7695d933301) |
+| csAMD | Advanced Micro Devices | [`0xd4a2b44a2fBa1ed1Dc17E28161699C57CF15799C`](https://sepolia.etherscan.io/address/0xd4a2b44a2fBa1ed1Dc17E28161699C57CF15799C) |
 
 ---
 
@@ -468,7 +473,8 @@ Ztocks/
 │   │   ├── sip/page.tsx         # SIP investment flow
 │   │   └── api/fhe/             # Server-side FHE API routes
 │   │       ├── encrypt-input/route.ts    # Build encrypted input bundles
-│   │       └── public-decrypt/route.ts  # Proxy Zama relayer decryption
+│   │       ├── public-decrypt/route.ts  # Proxy Zama relayer public decryption
+│   │       └── user-decrypt/route.ts    # Orchestrate EIP-712 user decryption
 │   ├── components/              # UI components
 │   ├── hooks/
 │   │   ├── use-vault.ts         # Core trading hook — all tx logic
@@ -578,9 +584,9 @@ Copy the printed addresses to `frontend/.env.local` and `frontend/lib/sepolia-de
    - Tx 2: `lockCollateralConfidential` — encrypted collateral enters vault
    - Tx 3: `openPositionFromLocked` — encrypted position stored on-chain
    - Tx 4: `claimSynthForPosition` — encrypted synth tokens minted
-5. **View Position** — appears in Positions tab with encrypted values decrypted via user key
-6. **Close Position** — click Close, approve tx, USDC returned
-7. **Unwrap cUSDC** — two-step: `unwrap` → wait for Zama relayer (~20s) → `finalizeUnwrap`
+5. **View Position** — appears in Positions tab; encrypted fields (direction, collateral, leverage, entry price) are decrypted via EIP-712 wallet-signed user key through the Zama relayer
+6. **Close Position** — click Close, approve tx; full-confidential positions return cUSDC to your wallet; realized P&L is saved in portfolio
+7. **Unwrap cUSDC → USDC** — Portfolio page: enter amount → `unwrap` tx → Zama relayer publicly decrypts amount (~20s) → `finalizeUnwrap` → plain USDC lands in wallet
 
 ---
 
