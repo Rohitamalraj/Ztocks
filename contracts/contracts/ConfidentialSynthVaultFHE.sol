@@ -395,14 +395,20 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         if (!pos.isOpen) revert PositionAlreadyClosed();
         if (executionPrice == 0) revert InvalidExecutionPrice();
 
-        // Refund plaintext USDC collateral to the user.
-        uint256 collateralClear = positionCollateralPlain[msg.sender][positionId];
-        if (collateralClear == 0) revert InsufficientCollateral();
-        delete positionCollateralPlain[msg.sender][positionId];
-        IERC20 underlying = IERC20(collateralToken.underlying());
-        underlying.safeTransfer(msg.sender, collateralClear);
-
         pos.isOpen = false;
+
+        uint256 collateralClear = positionCollateralPlain[msg.sender][positionId];
+        if (collateralClear > 0) {
+            // Hybrid path: return plaintext USDC.
+            delete positionCollateralPlain[msg.sender][positionId];
+            IERC20 underlying = IERC20(collateralToken.underlying());
+            underlying.safeTransfer(msg.sender, collateralClear);
+        } else {
+            // Full-confidential path: return encrypted cUSDC to user.
+            // The vault holds the cUSDC balance from lockCollateralConfidential.
+            FHE.allow(pos.collateralUSDC, msg.sender);
+            collateralToken.confidentialTransfer(msg.sender, pos.collateralUSDC);
+        }
 
         emit PositionClosed(msg.sender, positionId, block.timestamp);
     }

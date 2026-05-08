@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -48,36 +48,94 @@ export default function PortfolioPage() {
   const vault    = useVault();
   const prices   = useAssetQuotes();
   const kyc = useKycTier();
+  const [realizedPnlById, setRealizedPnlById] = useState<Record<string, number>>({});
 
-  // Enrich positions with live mark price + P&L
-  const enrichedPositions = vault.positions.map((pos) => {
-    const livePrice = prices[pos.asset as AssetSymbol]?.price ?? 0;
-    const markPrice  = livePrice > 0 ? livePrice : pos.entryPrice;
-    const posSizeUSD = pos.collateralUSDC * pos.leverage;
-    const pnl = pos.isLong
-      ? posSizeUSD * ((markPrice - pos.entryPrice) / pos.entryPrice)
-      : posSizeUSD * ((pos.entryPrice - markPrice) / pos.entryPrice);
-    const pnlPercent = pos.collateralUSDC > 0 ? (pnl / pos.collateralUSDC) * 100 : 0;
-    const liqDelta   = (posSizeUSD * 0.9) / pos.leverage;
-    const liqPrice   = pos.isLong
-      ? pos.entryPrice - liqDelta
-      : pos.entryPrice + liqDelta;
+  useEffect(() => {
+    if (!address) {
+      setRealizedPnlById({});
+      return;
+    }
+    try {
+      const key = `ztocks:realized-pnl:${address.toLowerCase()}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) {
+        setRealizedPnlById({});
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, number>;
+      setRealizedPnlById(parsed && typeof parsed === "object" ? parsed : {});
+    } catch {
+      setRealizedPnlById({});
+    }
+  }, [address]);
+
+  // Enrich positions with live mark price + P&L — null-safe for encrypted fields
+  const enrichedAllPositions = vault.allPositions.map((pos) => {
+    const livePrice  = prices[pos.asset as AssetSymbol]?.price ?? 0;
+    const markPrice  = livePrice > 0 ? livePrice : (pos.entryPrice ?? 0);
     const displayTicker = pos.asset.startsWith("s") ? pos.asset.slice(1) : pos.asset;
-    return { ...pos, markPrice, pnl, pnlPercent, liqPrice: Math.max(0, liqPrice), displayTicker };
+
+    // Only compute derived numbers when every input field is decrypted
+    const canCompute =
+      pos.collateralUSDC !== null &&
+      pos.leverage !== null &&
+      pos.entryPrice !== null &&
+      pos.isLong !== null &&
+      markPrice > 0;
+
+    const posSizeUSD = canCompute ? pos.collateralUSDC! * pos.leverage! : null;
+    const pnl = canCompute
+      ? (pos.isLong
+          ? posSizeUSD! * ((markPrice - pos.entryPrice!) / pos.entryPrice!)
+          : posSizeUSD! * ((pos.entryPrice! - markPrice) / pos.entryPrice!))
+      : null;
+    const pnlPercent = canCompute && pos.collateralUSDC! > 0
+      ? (pnl! / pos.collateralUSDC!) * 100
+      : null;
+    const liqDelta = canCompute ? (posSizeUSD! * 0.9) / pos.leverage! : null;
+    const liqPrice = canCompute
+      ? Math.max(0, pos.isLong! ? pos.entryPrice! - liqDelta! : pos.entryPrice! + liqDelta!)
+      : null;
+
+    return { ...pos, markPrice, pnl, pnlPercent, liqPrice, displayTicker, posSizeUSD };
   });
 
-  const enrichedById = new Map(enrichedPositions.map((p) => [p.id, p]));
+  const enrichedPositions = enrichedAllPositions.filter((p) => p.isOpen);
+  const enrichedById = new Map(enrichedAllPositions.map((p) => [p.id, p]));
+
+  useEffect(() => {
+    if (!address) return;
+    setRealizedPnlById((prev) => {
+      let changed = false;
+      const next: Record<string, number> = { ...prev };
+      for (const pos of enrichedAllPositions) {
+        if (pos.isOpen) continue;
+        if (next[pos.id] !== undefined) continue;
+        if (pos.pnl === null || !Number.isFinite(pos.pnl)) continue;
+        next[pos.id] = pos.pnl;
+        changed = true;
+      }
+      if (changed) {
+        const key = `ztocks:realized-pnl:${address.toLowerCase()}`;
+        localStorage.setItem(key, JSON.stringify(next));
+        return next;
+      }
+      return prev;
+    });
+  }, [address, enrichedAllPositions]);
 
   const historyRows = [...vault.allPositions]
     .sort((a, b) => b.openedAt.getTime() - a.openedAt.getTime())
     .map((pos) => {
       const displayTicker = pos.asset.startsWith("s") ? pos.asset.slice(1) : pos.asset;
       const live = enrichedById.get(pos.id);
-      const effectivePnl = live?.pnl;
-      const hasPnl = typeof effectivePnl === "number" && Number.isFinite(effectivePnl);
-      const pnlText = hasPnl ? `${effectivePnl >= 0 ? "+" : ""}$${formatPnL(effectivePnl)}` : "N/A";
+      const effectivePnl = pos.isOpen
+        ? (live?.pnl ?? null)
+        : (realizedPnlById[pos.id] ?? live?.pnl ?? null);
+      const hasPnl = effectivePnl !== null && Number.isFinite(effectivePnl);
+      const pnlText = hasPnl ? `${effectivePnl! >= 0 ? "+" : ""}$${formatPnL(effectivePnl!)}` : "Encrypted";
       const pnlClass = hasPnl
-        ? (effectivePnl >= 0 ? "text-green-700" : "text-red-600")
+        ? (effectivePnl! >= 0 ? "text-green-700" : "text-red-600")
         : "text-muted-foreground";
       return {
         id: pos.id,
@@ -91,12 +149,19 @@ export default function PortfolioPage() {
       };
     });
 
-  // Portfolio stats
-  const openPnl = enrichedPositions.reduce((s, p) => s + p.pnl, 0);
-  const totalPnl = openPnl;
-  const openEquity = enrichedPositions.reduce((s, p) => s + p.collateralUSDC + p.pnl, 0);
+  // Portfolio stats — only sum positions where PnL is decrypted
+  const openPnl = enrichedPositions.reduce((s, p) => s + (p.pnl ?? 0), 0);
+  const realizedPnl = Object.values(realizedPnlById).reduce((s, p) => s + p, 0);
+  const totalPnl = openPnl + realizedPnl;
+  const openEquity = enrichedPositions.reduce(
+    (s, p) => s + (p.collateralUSDC ?? 0) + (p.pnl ?? 0),
+    0
+  );
   const totalValue = vault.usdcBalance + openEquity;
-  const openCount      = enrichedPositions.length;
+  const openCount = enrichedPositions.length;
+  const hasEncryptedPositions = enrichedAllPositions.some(
+    (p) => p.decryptionStatus !== "ready"
+  );
 
   const unwrapBusy =
     vault.txStatus === "unwrap-requesting" ||
@@ -159,15 +224,21 @@ export default function PortfolioPage() {
 
       {/* Stats Overview */}
       <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
           <div className="border border-foreground/10 p-4">
             <div className="text-xs font-mono text-muted-foreground mb-1">Total Value</div>
             <div className="text-2xl font-mono">${totalValue.toFixed(2)}</div>
           </div>
           <div className="border border-foreground/10 p-4">
-            <div className="text-xs font-mono text-muted-foreground mb-1">Total P&L</div>
-            <div className={`text-2xl font-mono ${totalPnl >= 0 ? "text-green-700" : "text-red-600"}`}>
-              {totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}
+            <div className="text-xs font-mono text-muted-foreground mb-1">Open P&L</div>
+            <div className={`text-2xl font-mono ${openPnl >= 0 ? "text-green-700" : "text-red-600"}`}>
+              {openPnl >= 0 ? "+" : ""}${openPnl.toFixed(2)}
+            </div>
+          </div>
+          <div className="border border-foreground/10 p-4">
+            <div className="text-xs font-mono text-muted-foreground mb-1">Realized P&L</div>
+            <div className={`text-2xl font-mono ${realizedPnl >= 0 ? "text-green-700" : "text-red-600"}`}>
+              {realizedPnl >= 0 ? "+" : ""}${realizedPnl.toFixed(2)}
             </div>
           </div>
           <div className="border border-foreground/10 p-4">
@@ -179,16 +250,21 @@ export default function PortfolioPage() {
             <div className="text-2xl font-mono">${vault.usdcBalance.toFixed(2)}</div>
           </div>
         </div>
+        {hasEncryptedPositions && (
+          <p className="text-[10px] font-mono text-muted-foreground mb-6">
+            ⚠ Some position fields are still encrypted on-chain. Totals above only include decrypted values.
+          </p>
+        )}
 
         <div className="border border-foreground/10 p-4 mb-8 bg-foreground/[0.02]">
-          <h2 className="text-sm font-mono mb-2">Withdraw USDC from cUSDC</h2>
+          <h2 className="text-sm font-mono mb-1">Unwrap cUSDC → USDC</h2>
           <p className="text-xs font-mono text-muted-foreground mb-3">
             After closing positions, collateral returns as confidential cUSDC. Unwrap burns cUSDC and credits plain USDC
             via Zama’s two-step unwrap (relayer public decryption).
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end max-w-xl">
             <div className="flex-1">
-              <label className="block text-[10px] font-mono text-muted-foreground mb-1">Amount (USDC)</label>
+              <label className="block text-[10px] font-mono text-muted-foreground mb-1">Amount (cUSDC to burn)</label>
               <input
                 type="number"
                 min={0}
@@ -212,7 +288,7 @@ export default function PortfolioPage() {
               className="px-4 py-2 bg-foreground text-background font-mono text-xs border border-foreground hover:bg-foreground/90 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
             >
               {unwrapBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-              {unwrapBusy ? vault.txStatus.replace(/-/g, " ") : "Withdraw USDC"}
+              {unwrapBusy ? vault.txStatus.replace(/-/g, " ") : "Unwrap to USDC"}
             </button>
           </div>
         </div>
@@ -273,22 +349,36 @@ export default function PortfolioPage() {
                   </div>
                   {/* Direction */}
                   <div>
-                    <span className={`font-mono text-xs px-2 py-0.5 ${pos.direction === "LONG" ? "bg-green-700/10 text-green-700" : "bg-red-600/10 text-red-600"}`}>
-                      {pos.direction} {pos.leverage}x
-                    </span>
+                    {pos.direction === "ENCRYPTED" ? (
+                      <span className="font-mono text-xs px-2 py-0.5 bg-foreground/10 text-muted-foreground">Encrypted</span>
+                    ) : (
+                      <span className={`font-mono text-xs px-2 py-0.5 ${pos.direction === "LONG" ? "bg-green-700/10 text-green-700" : "bg-red-600/10 text-red-600"}`}>
+                        {pos.direction}{pos.leverage !== null ? ` ${pos.leverage}x` : ""}
+                      </span>
+                    )}
                   </div>
                   {/* Collateral */}
-                  <div className="font-mono text-xs">${pos.collateralUSDC.toFixed(2)}</div>
+                  <div className="font-mono text-xs">
+                    {pos.collateralUSDC !== null ? `$${pos.collateralUSDC.toFixed(2)}` : <span className="text-muted-foreground">Encrypted</span>}
+                  </div>
                   {/* Entry */}
-                  <div className="font-mono text-xs">${formatPrice(pos.entryPrice)}</div>
+                  <div className="font-mono text-xs">
+                    {pos.entryPrice !== null ? `$${formatPrice(pos.entryPrice)}` : <span className="text-muted-foreground">Encrypted</span>}
+                  </div>
                   {/* Mark */}
-                  <div className="font-mono text-xs">${formatPrice(pos.markPrice)}</div>
+                  <div className="font-mono text-xs">
+                    {pos.markPrice > 0 ? `$${formatPrice(pos.markPrice)}` : <span className="text-muted-foreground">—</span>}
+                  </div>
                   {/* Liq Price */}
-                  <div className="font-mono text-xs text-red-600">${formatPrice(pos.liqPrice)}</div>
+                  <div className="font-mono text-xs text-red-600">
+                    {pos.liqPrice !== null ? `$${formatPrice(pos.liqPrice)}` : <span className="text-muted-foreground">Encrypted</span>}
+                  </div>
                   {/* P&L */}
-                  <div className={`font-mono text-xs ${pos.pnl >= 0 ? "text-green-700" : "text-red-600"}`}>
-                    {pos.pnl >= 0 ? "+" : ""}${formatPnL(pos.pnl)}
-                    <span className="text-[10px] ml-1 opacity-70">({formatPct(pos.pnlPercent)}%)</span>
+                  <div className={`font-mono text-xs ${pos.pnl === null ? "text-muted-foreground" : pos.pnl >= 0 ? "text-green-700" : "text-red-600"}`}>
+                    {pos.pnl === null
+                      ? "Encrypted"
+                      : (<>{pos.pnl >= 0 ? "+" : ""}${formatPnL(pos.pnl)}<span className="text-[10px] ml-1 opacity-70">({formatPct(pos.pnlPercent!)}%)</span></>)
+                    }
                   </div>
                   {/* Action */}
                   <div>
@@ -327,7 +417,9 @@ export default function PortfolioPage() {
                       {row.direction}
                     </span>
                   </div>
-                  <div className="font-mono text-xs">${row.collateralUSDC.toFixed(2)}</div>
+                  <div className="font-mono text-xs">
+                    {row.collateralUSDC !== null ? `$${row.collateralUSDC.toFixed(2)}` : <span className="text-muted-foreground">Encrypted</span>}
+                  </div>
                   <div className={`font-mono text-xs ${row.pnlClass}`}>{row.pnlText}</div>
                   <div>
                     <span className={`font-mono text-[10px] px-2 py-0.5 ${row.status === "OPEN" ? "bg-green-700/10 text-green-700" : "bg-foreground/10 text-foreground/80"}`}>
