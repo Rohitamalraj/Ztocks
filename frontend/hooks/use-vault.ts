@@ -44,13 +44,14 @@ export interface OnChainPosition {
   id:             string;
   index:          number;
   asset:          AssetSymbol;
-  direction:      "LONG" | "SHORT";
-  isLong:         boolean;
-  collateralUSDC: number;
-  leverage:       number;
-  entryPrice:     number;
+  direction:      "LONG" | "SHORT" | "ENCRYPTED";
+  isLong:         boolean | null;
+  collateralUSDC: number | null;
+  leverage:       number | null;
+  entryPrice:     number | null;
   openedAt:       Date;
   isOpen:         boolean;
+  decryptionStatus: "ready" | "partial" | "unavailable";
 }
 
 function toExecutionPriceE8(price: number): bigint {
@@ -591,28 +592,54 @@ export function useVault() {
       }
 
       const contractAddress = CONTRACTS.SynthVault as `0x${string}`;
+      const fallbackContracts = (assetAddress?: string) =>
+        [contractAddress, CONTRACTS.CUSDC, assetAddress]
+          .filter((v): v is string => !!v)
+          .map((v) => v as `0x${string}`);
+
+      async function decryptWithFallback<T>(
+        fn: (handle: Hex, c: `0x${string}`, signer: unknown) => Promise<T | null>,
+        handle: Hex,
+        candidates: `0x${string}`[],
+      ): Promise<T | null> {
+        for (const c of candidates) {
+          const out = await fn(handle, c, walletClient);
+          if (out !== null) return out;
+        }
+        return null;
+      }
+
       const next = await Promise.all(
         (rawPositions as any[]).map(async (p, i) => {
+          const candidates = fallbackContracts(p.asset);
           const [isLong, collateralUSDC, leverageRaw, entryPrice] = await Promise.all([
-            decryptEbool(p.isLong, contractAddress, walletClient),
-            decryptEuint64(p.collateralUSDC, contractAddress, walletClient),
-            decryptEuint8(p.leverage, contractAddress, walletClient),
-            decryptEuint64(p.entryPrice, contractAddress, walletClient),
+            decryptWithFallback(decryptEbool, p.isLong, candidates),
+            decryptWithFallback(decryptEuint64, p.collateralUSDC, candidates),
+            decryptWithFallback(decryptEuint8, p.leverage, candidates),
+            decryptWithFallback(decryptEuint64, p.entryPrice, candidates),
           ]);
 
-          const leverageNum = leverageRaw ? Number(leverageRaw) : 0;
-          const isLongFlag = isLong ?? true;
+          const isLongFlag = isLong ?? null;
+          const collateralNum = collateralUSDC !== null ? Number(collateralUSDC) / 1e6 : null;
+          const leverageNum = leverageRaw !== null ? Number(leverageRaw) : null;
+          const entryPriceNum = entryPrice !== null ? Number(entryPrice) / 1e8 : null;
+          const decryptedCount = [isLong, collateralUSDC, leverageRaw, entryPrice].filter((v) => v !== null).length;
+          const decryptionStatus =
+            decryptedCount === 4 ? "ready" :
+            decryptedCount === 0 ? "unavailable" :
+            "partial";
           return {
             id:             String(i),
             index:          i,
             asset:          TOKEN_SYMBOL[p.asset.toLowerCase()] ?? "sAAPL",
-            direction:      (isLongFlag ? "LONG" : "SHORT") as "LONG" | "SHORT",
+            direction:      isLongFlag === null ? "ENCRYPTED" : ((isLongFlag ? "LONG" : "SHORT") as "LONG" | "SHORT"),
             isLong:         isLongFlag,
-            collateralUSDC: collateralUSDC ? Number(collateralUSDC) / 1e6 : 0,
-            leverage:       leverageNum > 0 ? leverageNum : 1,
-            entryPrice:     entryPrice ? Number(entryPrice) / 1e8 : 0,
+            collateralUSDC: collateralNum,
+            leverage:       leverageNum,
+            entryPrice:     entryPriceNum,
             openedAt:       new Date(Number(p.openTime) * 1000),
             isOpen:         p.isOpen,
+            decryptionStatus,
           } as OnChainPosition;
         })
       );

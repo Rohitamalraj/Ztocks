@@ -201,6 +201,10 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         // Clear staging collateral after successful open.
         lockedCollateral[msg.sender] = FHE.asEuint64(0);
 
+        // Allow vault to read every stored handle (required for relayer ACL checks on user-decrypt).
+        FHE.allowThis(isLong);
+        FHE.allowThis(executionPrice);
+
         FHE.allow(isLong, msg.sender);
         FHE.allow(collateralUSDC, msg.sender);
         FHE.allow(leverage, msg.sender);
@@ -362,9 +366,20 @@ contract ConfidentialSynthVaultFHE is Ownable, ReentrancyGuard, Pausable, ZamaEt
         }));
         positionCollateralPlain[msg.sender][positionId] = collateralUSDC;
 
-        // 7. Allow user to decrypt
+        // 7. Allow vault itself to hold ACL access (required for relayer user-decrypt checks).
+        FHE.allowThis(leverage);
+        FHE.allowThis(encCollateral);
+        // isLong and entryPrice inline handles
+        euint64 entryPriceHandle = positions[msg.sender][positionId].entryPrice;
+        ebool   isLongHandle     = positions[msg.sender][positionId].isLong;
+        FHE.allowThis(entryPriceHandle);
+        FHE.allowThis(isLongHandle);
+
+        // 8. Allow user to decrypt all fields
         FHE.allow(leverage, msg.sender);
         FHE.allow(encCollateral, msg.sender);
+        FHE.allow(entryPriceHandle, msg.sender);
+        FHE.allow(isLongHandle, msg.sender);
 
         emit PositionOpened(msg.sender, positionId, synthToken, block.timestamp);
     }

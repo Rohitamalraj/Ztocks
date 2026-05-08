@@ -80,17 +80,25 @@ export default function TradePage() {
   // ─── Build positions for PositionsPanel ────────────────────────────────────
   const enrichedPositions = vault.positions.map((pos) => {
     const livePrice = prices[pos.asset]?.price ?? 0;
-    const markPrice  = livePrice > 0 ? livePrice : pos.entryPrice;
-    const posSizeUSD = pos.collateralUSDC * pos.leverage;
-    const pnl = pos.isLong
-      ? posSizeUSD * ((markPrice - pos.entryPrice) / pos.entryPrice)
-      : posSizeUSD * ((pos.entryPrice - markPrice) / pos.entryPrice);
-    const pnlPercentage = pos.collateralUSDC > 0 ? (pnl / pos.collateralUSDC) * 100 : 0;
-    // Liquidation: position liquidates when equity < 10% of position size
-    const liqDelta     = (posSizeUSD * 0.9) / pos.leverage;
-    const liquidationPrice = pos.isLong
-      ? pos.entryPrice - liqDelta
-      : pos.entryPrice + liqDelta;
+    const markPrice = livePrice > 0 ? livePrice : (pos.entryPrice ?? null);
+    const hasNumbers =
+      pos.collateralUSDC !== null &&
+      pos.leverage !== null &&
+      pos.entryPrice !== null &&
+      pos.isLong !== null &&
+      markPrice !== null &&
+      pos.leverage > 0 &&
+      pos.entryPrice > 0;
+    const posSizeUSD = hasNumbers ? pos.collateralUSDC * pos.leverage : null;
+    const pnl = hasNumbers
+      ? (pos.isLong
+          ? posSizeUSD! * ((markPrice! - pos.entryPrice!) / pos.entryPrice!)
+          : posSizeUSD! * ((pos.entryPrice! - markPrice!) / pos.entryPrice!))
+      : null;
+    const pnlPercentage = hasNumbers && pos.collateralUSDC! > 0 ? (pnl! / pos.collateralUSDC!) * 100 : null;
+    const liquidationPrice = hasNumbers
+      ? (pos.isLong ? pos.entryPrice! * 0.1 : pos.entryPrice! * 1.9)
+      : null;
 
     // Strip "s" prefix for display ticker
     const displayTicker = pos.asset.startsWith("s") ? pos.asset.slice(1) : pos.asset;
@@ -104,9 +112,10 @@ export default function TradePage() {
       leverage:         pos.leverage,
       entryPrice:       pos.entryPrice,
       markPrice,
-      liquidationPrice: Math.max(0, liquidationPrice),
+      liquidationPrice: liquidationPrice !== null ? Math.max(0, liquidationPrice) : null,
       pnl,
       pnlPercentage,
+      decryptionStatus: pos.decryptionStatus,
     };
   });
 

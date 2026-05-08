@@ -7,14 +7,15 @@ import { TokenLogo } from '@/components/ui/token-logo'
 interface Position {
   id: string
   ticker: string
-  direction: 'LONG' | 'SHORT'
-  size: number
-  leverage: number
-  entryPrice: number
-  markPrice: number
-  liquidationPrice: number
-  pnl: number
-  pnlPercentage: number
+  direction: 'LONG' | 'SHORT' | 'ENCRYPTED'
+  size: number | null
+  leverage: number | null
+  entryPrice: number | null
+  markPrice: number | null
+  liquidationPrice: number | null
+  pnl: number | null
+  pnlPercentage: number | null
+  decryptionStatus?: 'ready' | 'partial' | 'unavailable'
 }
 
 interface PositionsPanelProps {
@@ -43,6 +44,11 @@ function formatPrice(value: number): string {
   if (abs >= 100) return value.toFixed(2)
   if (abs >= 1) return value.toFixed(3)
   return value.toFixed(4)
+}
+
+function showMaybeMoney(value: number | null): string {
+  if (value === null) return "Encrypted";
+  return `$${formatPrice(value)}`;
 }
 
 export function PositionsPanel({ positions, onClosePosition, isClosing }: PositionsPanelProps) {
@@ -132,7 +138,11 @@ export function PositionsPanel({ positions, onClosePosition, isClosing }: Positi
                         <span className="font-mono text-xs">{position.ticker}/USD</span>
                         <span
                           className={`font-mono text-[10px] ${
-                            position.direction === 'LONG' ? 'text-green-700' : 'text-red-600'
+                            position.direction === 'LONG'
+                              ? 'text-green-700'
+                              : position.direction === 'SHORT'
+                                ? 'text-red-600'
+                                : 'text-muted-foreground'
                           }`}
                         >
                           {position.direction}
@@ -142,32 +152,42 @@ export function PositionsPanel({ positions, onClosePosition, isClosing }: Positi
 
                     {/* Size */}
                     <div className="flex items-center justify-end">
-                      <span className="font-mono text-xs">${position.size.toLocaleString()}</span>
+                      <span className="font-mono text-xs">
+                        {position.size === null ? "Encrypted" : `$${position.size.toLocaleString()}`}
+                      </span>
                     </div>
 
                     {/* Leverage */}
                     <div className="flex items-center justify-end">
-                      <span className="font-mono text-xs">{position.leverage}x</span>
+                      <span className="font-mono text-xs">
+                        {position.leverage === null ? "Encrypted" : `${position.leverage}x`}
+                      </span>
                     </div>
 
                     {/* Entry Price */}
                     <div className="flex items-center justify-end">
-                      <span className="font-mono text-xs">${formatPrice(position.entryPrice)}</span>
+                      <span className="font-mono text-xs">{showMaybeMoney(position.entryPrice)}</span>
                     </div>
 
                     {/* Mark Price */}
                     <div className="flex items-center justify-end">
                       <div className="flex flex-col items-end">
-                        <span className="font-mono text-xs">${formatPrice(position.markPrice)}</span>
-                        <span className={`font-mono text-[10px] ${position.markPrice >= position.entryPrice ? 'text-green-700/70' : 'text-red-600/70'}`}>
-                          {position.markPrice >= position.entryPrice ? '+' : ''}{(position.markPrice - position.entryPrice).toFixed(4)}
-                        </span>
+                        <span className="font-mono text-xs">{showMaybeMoney(position.markPrice)}</span>
+                        {position.markPrice !== null && position.entryPrice !== null ? (
+                          <span className={`font-mono text-[10px] ${position.markPrice >= position.entryPrice ? 'text-green-700/70' : 'text-red-600/70'}`}>
+                            {position.markPrice >= position.entryPrice ? '+' : ''}{(position.markPrice - position.entryPrice).toFixed(4)}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-[10px] text-muted-foreground">Encrypted</span>
+                        )}
                       </div>
                     </div>
 
                     {/* Liquidation Price */}
                     <div className="flex items-center justify-end">
-                      <span className="font-mono text-xs text-red-600">${position.liquidationPrice.toFixed(2)}</span>
+                      <span className="font-mono text-xs text-red-600">
+                        {position.liquidationPrice === null ? "Encrypted" : `$${position.liquidationPrice.toFixed(2)}`}
+                      </span>
                     </div>
 
                     {/* PNL */}
@@ -175,17 +195,25 @@ export function PositionsPanel({ positions, onClosePosition, isClosing }: Positi
                       <div className="flex flex-col items-end">
                         <span
                           className={`font-mono text-xs ${
-                            position.pnl >= 0 ? 'text-green-700' : 'text-red-600'
+                            position.pnl === null
+                              ? 'text-muted-foreground'
+                              : position.pnl >= 0
+                                ? 'text-green-700'
+                                : 'text-red-600'
                           }`}
                         >
-                          {position.pnl >= 0 ? '+' : ''}${formatPnL(position.pnl)}
+                          {position.pnl === null ? 'Encrypted' : `${position.pnl >= 0 ? '+' : ''}$${formatPnL(position.pnl)}`}
                         </span>
                         <span
                           className={`font-mono text-[10px] ${
-                            position.pnl >= 0 ? 'text-green-700/70' : 'text-red-600/70'
+                            position.pnl === null
+                              ? 'text-muted-foreground'
+                              : position.pnl >= 0
+                                ? 'text-green-700/70'
+                                : 'text-red-600/70'
                           }`}
                         >
-                          {position.pnlPercentage >= 0 ? '+' : ''}{formatPct(position.pnlPercentage)}%
+                          {position.pnlPercentage === null ? 'Encrypted' : `${position.pnlPercentage >= 0 ? '+' : ''}${formatPct(position.pnlPercentage)}%`}
                         </span>
                       </div>
                     </div>
